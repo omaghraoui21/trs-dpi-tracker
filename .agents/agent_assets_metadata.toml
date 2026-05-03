@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "RhnwAAgpHSfM3Wjb18I6G"
+uri = "file://trs-dpi-codebase.tar.gz"
+type = "unspecified"
+title = "TRS/DPI Codebase — archive complète"

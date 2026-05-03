@@ -1,0 +1,409 @@
+Revoir l’architecture database pour qu’elle soit scalable, multi-années et indépendante de Replit.
+
+Objectif :
+L’application TRS / Planning DPI doit fonctionner sans limite d’année : 2026, 2027, 2028, etc.
+Ne jamais créer une table par mois, par semaine ou par année.
+Toutes les données doivent être filtrables par date, semaine, mois, trimestre, année, équipement, produit, lot et activité.
+
+Architecture cible :
+- Frontend : React / Next.js déployable sur Vercel
+- Backend : API Node.js / Express ou API routes Next.js
+- Database principale : Supabase PostgreSQL
+- Auth : Supabase Auth ou système compatible JWT
+- Storage fichiers : Supabase Storage
+- Déploiement beta : Replit possible uniquement pour développement
+- Déploiement production : Vercel + Supabase
+- Phase future : possibilité de migrer vers serveur entreprise PostgreSQL sans refonte majeure
+
+Exigence majeure :
+L’application ne doit pas dépendre de Replit pour fonctionner.
+Replit est seulement l’environnement de développement.
+Toutes les variables sensibles doivent être dans .env :
+- DATABASE_URL
+- SUPABASE_URL
+- SUPABASE_ANON_KEY
+- SUPABASE_SERVICE_ROLE_KEY
+- JWT_SECRET
+- STORAGE_BUCKET
+
+Créer une architecture facilement externalisable :
+- Pas de données stockées localement dans Replit
+- Pas de fichier JSON local comme base de données
+- Pas de SQLite pour la production
+- Toutes les données métier dans Supabase PostgreSQL
+- Tous les fichiers planning importés dans Supabase Storage
+- Export complet possible en CSV / Excel / JSON
+- Backup SQL possible
+- Migration possible vers PostgreSQL entreprise
+
+Database scalable :
+Créer les tables principales suivantes :
+
+1. users
+- id
+- email
+- full_name
+- role_id
+- department
+- active
+- created_at
+- updated_at
+
+2. roles
+- id
+- name
+- permissions
+
+3. sites
+- id
+- code
+- name
+- location
+
+4. rooms
+- id
+- site_id
+- code
+- name
+- room_type
+- status
+- created_at
+- updated_at
+
+Exemples rooms :
+- A23 Box de process
+- A26 Stockage intermédiaire
+- A20 Laverie
+- A19 Local matériel propre
+
+5. equipments
+- id
+- site_id
+- room_id
+- code
+- name
+- equipment_type
+- status
+- active
+- created_at
+- updated_at
+
+Exemples :
+- Géluleuse Harro Höfliger
+- Blistereuse IMA TR135 S
+- Ligne conditionnement secondaire 1
+- Ligne conditionnement secondaire 2
+
+6. products
+- id
+- code
+- name
+- dosage
+- pharmaceutical_form
+- active
+- created_at
+- updated_at
+
+7. product_equipment_cadences
+- id
+- product_id
+- equipment_id
+- reference_cadence
+- cadence_unit
+- valid_from
+- valid_to
+- source
+- active
+
+Important :
+La cadence doit être historisée par période.
+Une cadence peut changer en 2027 sans écraser celle utilisée en 2026.
+
+8. planning_imports
+- id
+- file_name
+- file_url
+- week_number
+- year
+- imported_by
+- imported_at
+- validation_status
+- validated_by
+- validated_at
+- comments
+
+9. production_plans
+- id
+- planning_import_id
+- site_id
+- year
+- week_number
+- planned_date
+- day_name
+- activity_type
+- equipment_id
+- room_id
+- product_id
+- lot_number
+- planned_quantity
+- planned_unit
+- planned_start_time
+- planned_end_time
+- status
+- created_at
+- updated_at
+
+Important :
+production_plans doit contenir la date réelle planned_date.
+Ne pas se baser seulement sur “S17” ou “Lundi”.
+La semaine et l’année servent au filtre, mais la date est la référence principale.
+
+10. production_entries
+- id
+- production_plan_id
+- site_id
+- equipment_id
+- room_id
+- product_id
+- lot_number
+- entry_date
+- shift
+- actual_start_time
+- actual_end_time
+- produced_quantity
+- good_quantity
+- rejected_quantity
+- unit
+- status
+- submitted_by
+- submitted_at
+- validated_by
+- validated_at
+- supervisor_comment
+- created_at
+- updated_at
+
+11. downtime_categories
+- id
+- code
+- name
+- planned_or_unplanned
+- impact_time
+- impact_kpi
+- active
+
+Exemples impact_time :
+- tO
+- tR
+- tF
+- tN
+- tU
+
+12. downtime_events
+- id
+- production_entry_id
+- equipment_id
+- room_id
+- downtime_category_id
+- start_time
+- end_time
+- duration_minutes
+- comment
+- severity
+- status
+- created_by
+- closed_by
+- created_at
+- closed_at
+
+13. equipment_status_events
+- id
+- equipment_id
+- room_id
+- status
+- product_id
+- lot_number
+- activity_type
+- started_at
+- ended_at
+- created_by
+- comment
+
+Statuts :
+- Disponible
+- En production
+- En nettoyage
+- En maintenance
+- En panne
+- En attente
+- Bloqué
+
+14. room_status_events
+- id
+- room_id
+- status
+- activity_type
+- product_id
+- lot_number
+- started_at
+- ended_at
+- created_by
+- comment
+
+15. kpi_daily
+- id
+- site_id
+- equipment_id
+- product_id
+- date
+- year
+- month
+- week_number
+- planned_quantity
+- produced_quantity
+- good_quantity
+- rejected_quantity
+- tT
+- tO
+- tR
+- tF
+- tN
+- tU
+- DO
+- TP
+- TQ
+- TRS
+- TRG
+- TRE
+- planning_adherence_rate
+- created_at
+- updated_at
+
+16. kpi_monthly
+- id
+- site_id
+- equipment_id
+- product_id
+- year
+- month
+- planned_quantity
+- produced_quantity
+- good_quantity
+- rejected_quantity
+- tT_total
+- tO_total
+- tR_total
+- tF_total
+- tN_total
+- tU_total
+- DO
+- TP
+- TQ
+- TRS
+- TRG
+- TRE
+- planning_adherence_rate
+- created_at
+- updated_at
+
+Règle importante :
+Le TRS mensuel doit être calculé sur les totaux :
+TRS = tU_total / tR_total
+Ne jamais faire une moyenne simple des TRS journaliers.
+
+17. notifications
+- id
+- type
+- severity
+- site_id
+- equipment_id
+- room_id
+- product_id
+- lot_number
+- message
+- status
+- created_at
+- acknowledged_by
+- acknowledged_at
+- closed_by
+- closed_at
+- closure_comment
+
+18. audit_log
+- id
+- table_name
+- record_id
+- action
+- old_value
+- new_value
+- changed_by
+- changed_at
+- reason
+
+19. monthly_closures
+- id
+- site_id
+- year
+- month
+- status
+- closed_by
+- closed_at
+- comment
+
+Règles database :
+- Utiliser UUID comme clé primaire.
+- Utiliser created_at et updated_at partout.
+- Utiliser des index sur :
+  - date
+  - year
+  - month
+  - week_number
+  - equipment_id
+  - product_id
+  - lot_number
+  - status
+- Utiliser des foreign keys.
+- Utiliser soft delete si nécessaire, jamais suppression définitive des données critiques.
+- Prévoir Row Level Security Supabase.
+- Prévoir audit trail automatique sur les tables critiques.
+- Prévoir migration SQL versionnée.
+
+Exports :
+Créer un module d’export complet :
+- Export planning importé
+- Export production réalisée
+- Export arrêts
+- Export KPI journalier
+- Export KPI mensuel
+- Export audit trail
+- Formats : CSV, Excel, JSON
+- Filtres : année, mois, semaine, équipement, produit, lot, activité
+
+Portabilité :
+Créer un dossier /database contenant :
+- schema.sql
+- seed.sql
+- migrations/
+- backup_example.sql
+- supabase_setup.md
+
+Créer un dossier /docs contenant :
+- data_model.md
+- calculation_rules.md
+- deployment_vercel_supabase.md
+- migration_to_company_server.md
+
+Prévoir script :
+- npm run db:migrate
+- npm run db:seed
+- npm run export:data
+- npm run backup:sql
+
+Objectif final :
+Je dois pouvoir :
+1. Développer sur Replit
+2. Déployer sur Vercel
+3. Garder les données dans Supabase
+4. Exporter toutes les données facilement
+5. Migrer plus tard vers un serveur PostgreSQL entreprise
+6. Continuer à utiliser l’application en 2026, 2027, 2028 et les années suivantes sans changer la structure database.

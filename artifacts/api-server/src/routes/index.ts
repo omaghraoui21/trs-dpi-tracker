@@ -1,0 +1,46 @@
+import { Router, type IRouter } from "express";
+import healthRouter from "./health";
+import authRouter from "./auth";
+import usersRouter from "./users";
+import equipmentsRouter from "./equipments";
+import productsRouter from "./products";
+import downtimeCategoriesRouter from "./downtime-categories";
+import productionEntriesRouter from "./production-entries";
+import downtimeEventsRouter from "./downtime-events";
+import dashboardRouter from "./dashboard";
+import monthlyClosuresRouter from "./monthly-closures";
+import planningRouter from "./planning";
+import notificationsRouter from "./notifications";
+import reportsRouter from "./reports";
+import kpiTargetsRouter from "./kpi-targets";
+import calculationFormulasRouter from "./calculation-formulas";
+import planningMappingsRouter from "./planning-mappings";
+import notificationRulesRouter from "./notification-rules";
+import adminConfigRouter from "./admin-config";
+import calendarEventsRouter from "./calendar-events";
+import dailyEntriesRouter from "./daily-entries";
+
+const router: IRouter = Router();
+
+router.use(healthRouter);
+router.use(authRouter);
+router.use(usersRouter);
+router.use(equipmentsRouter);
+router.use(productsRouter);
+router.use(downtimeCategoriesRouter);
+router.use(productionEntriesRouter);
+router.use(downtimeEventsRouter);
+router.use(dashboardRouter);
+router.use(monthlyClosuresRouter);
+router.use(planningRouter);
+router.use(notificationsRouter);
+router.use(reportsRouter);
+router.use(kpiTargetsRouter);
+router.use(calculationFormulasRouter);
+router.use(planningMappingsRouter);
+router.use(notificationRulesRouter);
+router.use("/admin", adminConfigRouter);
+router.use(calendarEventsRouter);
+router.use(dailyEntriesRouter);
+
+export default router;

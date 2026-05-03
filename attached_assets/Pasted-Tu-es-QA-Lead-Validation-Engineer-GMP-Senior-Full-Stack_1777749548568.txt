@@ -1,0 +1,867 @@
+Tu es QA Lead + Validation Engineer GMP + Senior Full-Stack Engineer.
+
+Objectif :
+Réaliser un test complet de production A à Z de l’application DPI TRS Tracker avant déploiement beta.
+
+Contexte :
+Application de suivi TRS / planning / activités / arrêts pour une unité DPI pharmaceutique.
+L’application gère :
+- planning hebdomadaire importé depuis Excel
+- activités multi-jour / multi-local
+- production DPI
+- nettoyage
+- maintenance
+- géluleuse
+- blistereuse
+- conditionnement secondaire
+- assemblage Combifor
+- TRS / TRG / TRE / DO / TP / TQ
+- dashboard opérateur
+- dashboard superviseur
+- dashboard responsable production
+- module admin
+- export Excel reporting
+- Supabase + Vercel
+
+Règle absolue :
+Ne pas ajouter de nouvelles fonctionnalités.
+Tester, corriger, stabiliser, documenter.
+L’application doit être production-ready, rapide, fiable et utilisable par les opérateurs.
+
+---
+
+# 1. Préparer environnement QA
+
+Créer un environnement QA séparé :
+
+- SUPABASE_PROJECT = qa
+- DATABASE_URL_QA
+- STORAGE_BUCKET_QA
+- APP_MODE=qa
+- NODE_ENV=test
+
+Créer aussi :
+
+- .env.example
+- .env.qa.example
+- .env.production.example
+
+Vérifier que :
+- aucune clé service role Supabase n’est exposée côté frontend
+- toutes les variables sensibles sont dans .env
+- Replit ne contient aucune donnée de production
+- Supabase est la seule source de données métier
+- Vercel peut déployer sans dépendance locale
+
+---
+
+# 2. Nettoyage avant test
+
+Avant de tester, faire :
+
+- npm install
+- npm run lint
+- npm run typecheck
+- npm run build
+
+Corriger :
+- erreurs TypeScript
+- imports inutilisés
+- variables inutilisées
+- composants cassés
+- routes cassées
+- console.log inutiles
+- dépendances inutiles
+- erreurs de build
+- erreurs de rendu React
+
+Créer un rapport :
+QA_PRECHECK_REPORT.md
+
+Avec :
+- erreurs trouvées
+- corrections appliquées
+- erreurs restantes
+- niveau de risque
+
+---
+
+# 3. Tests database Supabase
+
+Tester le schéma database complet.
+
+Vérifier tables :
+- users
+- roles
+- sites
+- rooms
+- equipments
+- products
+- product_presentations
+- assembly_boms
+- product_equipment_cadences
+- activities
+- production_plans
+- downtime_categories
+- downtime_events
+- equipment_status_events
+- room_status_events
+- notifications
+- kpi_daily
+- kpi_monthly
+- report_exports
+- audit_log
+- monthly_closures
+- planning_imports
+
+Vérifier :
+- primary keys UUID
+- foreign keys
+- indexes
+- created_at / updated_at
+- soft delete si nécessaire
+- contraintes NOT NULL cohérentes
+- champs nullable corrects pour nettoyage / maintenance
+- RLS activé
+- policies par rôle
+- audit_log sur tables critiques
+
+Créer tests SQL :
+- insertion activité production
+- insertion activité nettoyage sans produit/lot
+- insertion activité maintenance sans produit/lot
+- insertion activité assemblage Combifor
+- insertion arrêt lié à activité
+- suppression refusée ou soft delete
+- audit_log généré
+
+Livrable :
+DATABASE_QA_REPORT.md
+
+---
+
+# 4. Tests seed data DPI
+
+Tester le bouton ou script :
+“Charger configuration DPI TERIAK EF”
+
+Vérifier que le seed crée correctement :
+
+Locaux :
+- A23 Box process fabrication
+- Local géluleuse
+- Local blistereuse
+- Local conditionnement secondaire
+- A26 stockage intermédiaire
+- A20 laverie
+- A19 matériel propre
+- A18 couloir
+
+Produits :
+- Aerofor 12 µg
+- Aeronide 200 µg
+- Aeronide 400 µg
+- Combifor 12/200
+- Combifor 12/400
+
+Présentations :
+- Aerofor 12 Boîte 30
+- Aerofor 12 Boîte 60
+- Aerofor 12 Pochette Combifor
+- Aeronide 200 Boîte 60
+- Aeronide 200 Pochette Combifor
+- Aeronide 400 Boîte 60
+- Aeronide 400 Pochette Combifor
+- Combifor 12/200 produit assemblé
+- Combifor 12/400 produit assemblé
+
+Équipements :
+- Géluleuse Harro Höfliger
+- Blistereuse IMA TR135 S
+- Box process fabrication A23
+- Ligne conditionnement secondaire
+- Tamis Russell si conservé
+- Mélangeur Inversina si conservé
+
+Arrêts :
+- Bouchage poudre
+- Mauvais écoulement poudre
+- Changement bobine PVC
+- Changement bobine aluminium
+- Combifor / assemblage
+- Problème caméra
+- Manque charge
+- Maintenance
+- Nettoyage
+- Sous-performance
+- Micro-arrêts
+
+Vérifier que les valeurs non confirmées sont marquées :
+- À confirmer
+- Valeur provisoire
+- Validé
+
+Livrable :
+SEED_QA_REPORT.md
+
+---
+
+# 5. Tests calcul TRS / TRG / TRE
+
+Tester calculationService.ts.
+
+Cas obligatoires :
+
+Cas 1 — Production simple :
+- tO = 480 min
+- tR = 420 min
+- tF = 390 min
+- quantité produite = 360 000
+- quantité conforme = 358 000
+- cadence = 1000 unités/min
+Vérifier :
+- tN = quantité produite / cadence
+- tU = quantité conforme / cadence
+- DO = tF / tR
+- TP = tN / tF
+- TQ = tU / tN
+- TRS = tU / tR
+- TRG = tU / tO
+- TRE = tU / tT
+
+Cas 2 — Journée nettoyage uniquement :
+- nettoyage local 08:00–12:00
+- nettoyage équipement 12:00–17:00
+Vérifier :
+- pas de produit requis
+- pas de lot requis
+- pas de quantité requise
+- pas de TRS artificiellement mauvais
+- statut = activité non productive planifiée
+
+Cas 3 — Journée mixte :
+- nettoyage planifié 08:00–10:00
+- production 10:00–17:00
+Vérifier :
+- nettoyage déduit correctement du temps requis
+- TRS calculé sur la vraie fenêtre productive
+
+Cas 4 — Arrêt non planifié :
+- production 08:00–17:00
+- panne 60 min
+Vérifier :
+- impact DO
+- notification générée si seuil dépassé
+
+Cas 5 — Sous-performance :
+- pas d’arrêt déclaré
+- cadence réelle faible
+Vérifier :
+- impact TP
+- insight “sous-performance cadence”
+
+Cas 6 — Qualité :
+- quantité produite > quantité conforme
+- rebuts élevés
+Vérifier :
+- impact TQ
+- alerte qualité si seuil dépassé
+
+Cas 7 — Mensuel :
+Vérifier que :
+- TRS mensuel = somme tU / somme tR
+- ne jamais faire moyenne simple des TRS journaliers
+
+Cas 8 — Division par zéro :
+- tR = 0
+- tF = 0
+- tN = 0
+Vérifier :
+- pas de crash
+- affichage N/A avec message clair
+
+Livrables :
+- tests unitaires Vitest
+- CALCULATION_QA_REPORT.md
+
+---
+
+# 6. Tests import planning Excel
+
+Tester import planning avec fichiers réels S17 / S18.
+
+Vérifier :
+- semaine détectée
+- année détectée
+- jours détectés
+- activités détectées
+- plusieurs activités dans une même cellule détectées
+- nettoyage détecté
+- maintenance détectée
+- production détectée
+- produit détecté
+- lot détecté
+- quantité détectée
+- présentation détectée si possible
+- erreurs affichées avant import
+- prévisualisation correcte
+- validation import correcte
+
+Cas spécifiques :
+- lundi nettoyage local 08:00–12:00
+- lundi nettoyage équipement 12:00–17:00
+- production Aerofor en A23
+- mise en gélules Aeronide
+- conditionnement primaire boîte ou pochette
+- assemblage Combifor en secondaire
+
+Vérifier :
+- nettoyage sans produit/lot accepté
+- production sans produit/lot refusée
+- activité vide ignorée
+- doublons détectés
+- activité multi-jour acceptée
+
+Livrables :
+- tests import
+- IMPORT_PLANNING_QA_REPORT.md
+
+---
+
+# 7. Tests UX opérateur
+
+Tester l’écran opérateur sur mobile, tablette et desktop.
+
+Objectif :
+Un opérateur doit pouvoir saisir une activité en moins de 30 secondes.
+
+Tester :
+- login opérateur
+- affichage “Ma journée”
+- timeline du jour
+- activité planifiée visible
+- bouton Démarrer
+- bouton Terminer
+- saisie quantité rapide
+- ajout arrêt rapide
+- déclaration panne
+- reprise brouillon
+- reprise dernière saisie
+- envoi superviseur
+
+Cas opérateur :
+
+1. Nettoyage local :
+- démarrer nettoyage
+- terminer nettoyage
+- aucun produit demandé
+- aucun lot demandé
+- aucune quantité demandée
+
+2. Production géluleuse :
+- produit prérempli depuis planning
+- lot prérempli
+- quantité planifiée visible
+- boutons +100 / +500 / +1000 / +5000
+- arrêt bouchage visible en priorité
+
+3. Blistereuse :
+- changement bobine PVC visible
+- changement bobine aluminium visible
+- problème caméra visible
+- présentation boîte / pochette visible
+
+4. Conditionnement secondaire :
+- mode continuité blistereuse
+- mode assemblage Combifor
+- composants Combifor visibles
+
+Vérifier :
+- pas de surcharge d’options
+- pas de scroll excessif
+- gros boutons
+- messages clairs
+- aucune erreur silencieuse
+- submit non bloqué sans explication
+
+Livrable :
+OPERATOR_UX_QA_REPORT.md
+
+---
+
+# 8. Tests superviseur
+
+Tester vue superviseur.
+
+Fonctions à tester :
+- voir activités à valider
+- voir anomalies uniquement
+- valider activité
+- rejeter activité avec motif
+- corriger quantité
+- corriger type d’arrêt
+- ajouter commentaire superviseur
+- clôturer activité bloquée
+- reprogrammer activité
+- valider plusieurs activités conformes
+
+Vérifier :
+- audit_log créé pour correction
+- commentaire obligatoire si correction critique
+- opérateur ne peut pas valider lui-même
+- superviseur ne peut pas modifier formules admin
+
+Livrable :
+SUPERVISOR_QA_REPORT.md
+
+---
+
+# 9. Tests dashboard responsable production
+
+Tester dashboard “Cockpit DPI”.
+
+Vérifier affichage :
+
+KPI :
+- TRS jour
+- TRS semaine
+- respect planning jour
+- respect planning semaine
+- temps production
+- temps nettoyage
+- temps maintenance
+- temps arrêt
+- activités en cours
+- activités terminées
+- activités en retard
+- pannes actives
+
+Cartes locaux :
+- A23
+- local géluleuse
+- local blistereuse
+- conditionnement secondaire
+- A26
+- A20
+- A19
+
+Cartes équipements :
+- Géluleuse
+- Blistereuse
+- conditionnement secondaire
+
+Graphiques :
+- TRS par équipement
+- TRS par produit
+- TRS par lot
+- Pareto arrêts
+- planning vs réalisé
+- temps par type activité
+
+Insights :
+- top problème
+- équipement critique
+- produit critique
+- arrêt dominant
+- recommandation action
+
+Vérifier :
+- aucun N/A inutile
+- si données insuffisantes, message clair
+- dashboard jour < 2 secondes
+- dashboard semaine < 3 secondes
+
+Livrable :
+PRODUCTION_MANAGER_DASHBOARD_QA_REPORT.md
+
+---
+
+# 10. Tests admin
+
+Tester module admin essentiel.
+
+Fonctions :
+- gérer utilisateurs
+- gérer rôles
+- gérer équipements
+- gérer locaux
+- gérer produits
+- gérer présentations
+- gérer cadences
+- gérer types activités
+- gérer types arrêts
+- gérer mapping planning
+- gérer objectifs KPI
+- gérer seuils notifications
+- gérer conversions unités
+- voir paramètres “À confirmer avant production”
+
+Vérifier :
+- toute modification critique demande commentaire
+- historique visible
+- rollback possible si prévu
+- aucun changement ne casse les anciens calculs
+- cadences historisées par période
+- tailles de lots non confirmées marquées “À confirmer”
+
+Livrable :
+ADMIN_QA_REPORT.md
+
+---
+
+# 11. Tests assemblage Combifor
+
+Tester cas Combifor 12/200 :
+- composant Aerofor 12 pochette
+- composant Aeronide 200 pochette
+- produit fini Combifor 12/200
+
+Tester cas Combifor 12/400 :
+- composant Aerofor 12 pochette
+- composant Aeronide 400 pochette
+- produit fini Combifor 12/400
+
+Vérifier :
+- composants requis affichés
+- quantités composants saisies
+- quantité assemblée saisie
+- rebuts saisis
+- manque composant déclenche alerte
+- respect planning calculé
+- export Excel inclut assemblage Combifor
+
+Livrable :
+COMBIFOR_QA_REPORT.md
+
+---
+
+# 12. Tests arrêts et problèmes DPI
+
+Tester arrêts spécifiques :
+
+Géluleuse :
+- bouchage poudre
+- mauvais écoulement poudre
+- alimentation gélules
+- poids hors tendance
+- vacuum
+- micro-arrêts
+- manque charge
+
+Blistereuse :
+- changement bobine PVC
+- changement bobine aluminium
+- Combifor / assemblage
+- caméra
+- thermoformage
+- scellage
+- décalage
+- attente articles
+
+Locaux :
+- nettoyage local
+- nettoyage équipement
+- vide d’atelier
+- intervention maintenance
+- A26 saturé
+- A20 bloqué
+- A19 matériel indisponible
+
+Vérifier :
+- impact KPI correct
+- notification correcte
+- affichage dashboard correct
+- Pareto correct
+- export Excel correct
+
+Livrable :
+DOWNTIME_DPI_QA_REPORT.md
+
+---
+
+# 13. Tests export Excel reporting
+
+Tester exports :
+
+- rapport journalier
+- rapport hebdomadaire
+- rapport mensuel
+- rapport direction
+- rapport technique détaillé
+- raw data
+
+Vérifier feuilles :
+1. Synthèse Direction
+2. TRS Équipements
+3. TRS Produits
+4. TRS Lots
+5. Planning vs Réalisé
+6. Arrêts Pareto
+7. Problèmes DPI
+8. Nettoyage / Maintenance
+9. Statut Locaux
+10. Données Sources
+11. Paramètres
+
+Vérifier :
+- fichier .xlsx valide
+- formules présentes
+- design propre
+- filtres activés
+- colonnes ajustées
+- KPI corrects
+- graphiques ou zones graphiques présents
+- données sources cohérentes
+- export stocké dans Supabase Storage
+- lien téléchargement fonctionnel
+
+Livrable :
+EXCEL_EXPORT_QA_REPORT.md
+
+---
+
+# 14. Tests sécurité
+
+Tester :
+- utilisateur non connecté redirigé login
+- opérateur ne voit pas admin
+- superviseur ne voit pas réglages critiques
+- admin voit tout
+- service role Supabase jamais exposé frontend
+- RLS activé
+- upload Excel limité aux fichiers .xlsx / .xls
+- taille max upload
+- validation backend obligatoire
+- protection contre données invalides
+- audit trail sur corrections critiques
+
+Livrable :
+SECURITY_QA_REPORT.md
+
+---
+
+# 15. Tests performance
+
+Mesurer :
+
+- login < 1 seconde
+- écran opérateur < 1 seconde
+- dashboard jour < 2 secondes
+- dashboard semaine < 3 secondes
+- import planning < 10 secondes
+- export Excel mensuel < 15 secondes
+- build production sans erreur
+
+Optimiser si nécessaire :
+- lazy loading
+- pagination
+- filtres serveur
+- memoization
+- index database
+- éviter recalcul historique complet
+- séparer données dashboard jour/semaine/mois
+- limiter graphiques lourds
+
+Livrable :
+PERFORMANCE_QA_REPORT.md
+
+---
+
+# 16. Tests responsive
+
+Tester tailles :
+- mobile 360px
+- mobile 414px
+- tablette
+- laptop
+- écran TV dashboard
+
+Vérifier :
+- boutons opérateur lisibles
+- timeline claire
+- dashboard non cassé
+- tableaux scrollables
+- pas de chevauchement
+- pas de texte illisible
+
+Livrable :
+RESPONSIVE_QA_REPORT.md
+
+---
+
+# 17. Tests offline / brouillon
+
+Tester :
+- perte connexion pendant saisie
+- brouillon sauvegardé localement
+- reprise après reconnexion
+- sync correcte
+- conflit détecté si activité déjà modifiée
+- message clair à l’utilisateur
+
+Livrable :
+OFFLINE_QA_REPORT.md
+
+---
+
+# 18. Tests UAT terrain simulé
+
+Créer un scénario complet sur une semaine.
+
+Semaine test :
+
+Lundi :
+- A23 nettoyage complet local 08:00–12:00
+- géluleuse nettoyage majeur 12:00–17:00
+
+Mardi :
+- A23 fabrication Aerofor
+- géluleuse Aerofor
+- arrêt bouchage 20 min
+
+Mercredi :
+- blistereuse Aerofor boîte 60
+- changement bobine PVC
+- conditionnement secondaire en parallèle
+
+Jeudi :
+- Aeronide 200
+- mauvais écoulement poudre
+- micro-arrêts
+
+Vendredi :
+- assemblage Combifor 12/200
+- manque pochettes Aeronide 200
+
+Samedi :
+- maintenance préventive
+
+Dimanche :
+- jour off
+
+Vérifier :
+- planning importé
+- activités affichées
+- saisies opérateur possibles
+- validations superviseur
+- KPI corrects
+- dashboard cohérent
+- export Excel complet
+
+Livrable :
+UAT_WEEK_SIMULATION_REPORT.md
+
+---
+
+# 19. Tests non-régression
+
+Créer suite de non-régression.
+
+Chaque correction doit relancer :
+- npm run test
+- npm run test:unit
+- npm run test:e2e
+- npm run lint
+- npm run typecheck
+- npm run build
+
+Créer commande :
+npm run validate:production
+
+Elle doit exécuter :
+- lint
+- typecheck
+- tests unitaires
+- tests e2e critiques
+- build
+- check env
+- check routes
+- check Supabase connection
+- check RLS
+- check migrations
+
+---
+
+# 20. Critères Go / No-Go
+
+GO production beta seulement si :
+
+- build production OK
+- aucun bug critique
+- login OK
+- opérateur peut saisir activité
+- superviseur peut valider
+- responsable production voit dashboard
+- import planning fonctionne
+- export Excel fonctionne
+- TRS calculé correctement
+- sécurité rôle OK
+- Supabase connecté
+- audit_log OK
+- données critiques non supprimables
+- temps de chargement acceptable
+
+NO-GO si :
+
+- erreur calcul TRS
+- export Excel faux
+- opérateur bloqué
+- rôle admin exposé
+- service key exposée
+- perte données
+- planning importé incorrectement
+- dashboard affiche KPI faux
+- build Vercel échoue
+
+---
+
+# 21. Livrables finaux QA
+
+Créer dossier :
+
+/qa
+
+Avec :
+
+- QA_MASTER_REPORT.md
+- QA_PRECHECK_REPORT.md
+- DATABASE_QA_REPORT.md
+- SEED_QA_REPORT.md
+- CALCULATION_QA_REPORT.md
+- IMPORT_PLANNING_QA_REPORT.md
+- OPERATOR_UX_QA_REPORT.md
+- SUPERVISOR_QA_REPORT.md
+- PRODUCTION_MANAGER_DASHBOARD_QA_REPORT.md
+- ADMIN_QA_REPORT.md
+- COMBIFOR_QA_REPORT.md
+- DOWNTIME_DPI_QA_REPORT.md
+- EXCEL_EXPORT_QA_REPORT.md
+- SECURITY_QA_REPORT.md
+- PERFORMANCE_QA_REPORT.md
+- RESPONSIVE_QA_REPORT.md
+- OFFLINE_QA_REPORT.md
+- UAT_WEEK_SIMULATION_REPORT.md
+- GO_NO_GO_REPORT.md
+
+Le rapport final QA_MASTER_REPORT.md doit contenir :
+
+1. Résumé exécutif
+2. État global : prêt / non prêt
+3. Bugs critiques
+4. Bugs majeurs
+5. Bugs mineurs
+6. Tests passés
+7. Tests échoués
+8. Risques production
+9. Recommandations
+10. Décision Go / No-Go
+
+---
+
+# 22. Règle finale
+
+Ne pas transformer les tests en théorie.
+Créer les tests automatisés, exécuter les commandes, corriger les bugs bloquants et documenter les résultats.
+
+L’objectif est simple :
+l’application doit être fiable, rapide, claire et utilisable dans mon unité DPI en production beta.

@@ -1,0 +1,2009 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: TRS/OEE DPI Pharmaceutical tracking API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: users
+    description: User management
+  - name: equipments
+    description: Equipment management
+  - name: products
+    description: Product management
+  - name: downtime-categories
+    description: Downtime category management
+  - name: production-entries
+    description: Production entry management
+  - name: downtime-events
+    description: Downtime event management
+  - name: dashboard
+    description: Dashboard and analytics
+  - name: monthly-closures
+    description: Monthly closure management
+  - name: planning
+    description: Production planning import and management
+  - name: notifications
+    description: Notification management
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # Auth
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Invalid credentials
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      responses:
+        "200":
+          description: Logged out
+
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+
+  # Users
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserBody"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: User not found
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Deactivate a user (soft delete)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: User deactivated
+
+  # Equipments
+  /equipments:
+    get:
+      operationId: listEquipments
+      tags: [equipments]
+      summary: List all equipments
+      responses:
+        "200":
+          description: List of equipments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Equipment"
+    post:
+      operationId: createEquipment
+      tags: [equipments]
+      summary: Create equipment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEquipmentBody"
+      responses:
+        "201":
+          description: Equipment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Equipment"
+
+  /equipments/{id}:
+    patch:
+      operationId: updateEquipment
+      tags: [equipments]
+      summary: Update equipment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEquipmentBody"
+      responses:
+        "200":
+          description: Equipment updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Equipment"
+
+  # Products
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      summary: List all products
+      responses:
+        "200":
+          description: List of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+    post:
+      operationId: createProduct
+      tags: [products]
+      summary: Create product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductBody"
+      responses:
+        "201":
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+
+  /products/{id}:
+    patch:
+      operationId: updateProduct
+      tags: [products]
+      summary: Update product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductBody"
+      responses:
+        "200":
+          description: Product updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+
+  # Cadences
+  /cadences:
+    get:
+      operationId: listCadences
+      tags: [products]
+      summary: List cadences by product and equipment
+      parameters:
+        - name: productId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: equipmentId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: List of cadences
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Cadence"
+    post:
+      operationId: upsertCadence
+      tags: [products]
+      summary: Create or update a cadence
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertCadenceBody"
+      responses:
+        "200":
+          description: Cadence upserted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cadence"
+
+  # Downtime categories
+  /downtime-categories:
+    get:
+      operationId: listDowntimeCategories
+      tags: [downtime-categories]
+      summary: List all downtime categories
+      responses:
+        "200":
+          description: List of downtime categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DowntimeCategory"
+    post:
+      operationId: createDowntimeCategory
+      tags: [downtime-categories]
+      summary: Create a downtime category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDowntimeCategoryBody"
+      responses:
+        "201":
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DowntimeCategory"
+
+  /downtime-categories/{id}:
+    patch:
+      operationId: updateDowntimeCategory
+      tags: [downtime-categories]
+      summary: Update a downtime category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDowntimeCategoryBody"
+      responses:
+        "200":
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DowntimeCategory"
+
+  # Production entries
+  /production-entries:
+    get:
+      operationId: listProductionEntries
+      tags: [production-entries]
+      summary: List production entries with filters
+      parameters:
+        - name: equipmentId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: productId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, submitted, validated, rejected]
+        - name: shift
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductionEntryWithDetails"
+    post:
+      operationId: createProductionEntry
+      tags: [production-entries]
+      summary: Create a production entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductionEntryBody"
+      responses:
+        "201":
+          description: Entry created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductionEntryWithDetails"
+
+  /production-entries/{id}:
+    get:
+      operationId: getProductionEntry
+      tags: [production-entries]
+      summary: Get a production entry by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Entry found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductionEntryWithDetails"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateProductionEntry
+      tags: [production-entries]
+      summary: Update a production entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductionEntryBody"
+      responses:
+        "200":
+          description: Entry updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductionEntryWithDetails"
+
+  /production-entries/{id}/submit:
+    post:
+      operationId: submitProductionEntry
+      tags: [production-entries]
+      summary: Submit entry to supervisor
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Entry submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductionEntryWithDetails"
+
+  /production-entries/{id}/validate:
+    post:
+      operationId: validateProductionEntry
+      tags: [production-entries]
+      summary: Validate or reject a production entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidateEntryBody"
+      responses:
+        "200":
+          description: Entry validated/rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductionEntryWithDetails"
+
+  # Downtime events
+  /downtime-events:
+    get:
+      operationId: listDowntimeEvents
+      tags: [downtime-events]
+      summary: List downtime events for an entry
+      parameters:
+        - name: entryId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: List of downtime events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DowntimeEvent"
+    post:
+      operationId: createDowntimeEvent
+      tags: [downtime-events]
+      summary: Add a downtime event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDowntimeEventBody"
+      responses:
+        "201":
+          description: Downtime event created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DowntimeEvent"
+
+  /downtime-events/{id}:
+    patch:
+      operationId: updateDowntimeEvent
+      tags: [downtime-events]
+      summary: Update a downtime event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDowntimeEventBody"
+      responses:
+        "200":
+          description: Downtime event updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DowntimeEvent"
+    delete:
+      operationId: deleteDowntimeEvent
+      tags: [downtime-events]
+      summary: Delete a downtime event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Deleted
+
+  # Dashboard & Analytics
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard KPI summary
+      parameters:
+        - name: equipmentId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: month
+          in: query
+          schema:
+            type: integer
+        - name: year
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/daily-trs:
+    get:
+      operationId: getDailyTrs
+      tags: [dashboard]
+      summary: Get daily TRS data for a period
+      parameters:
+        - name: equipmentId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Daily TRS data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DailyTrsPoint"
+
+  /dashboard/downtime-pareto:
+    get:
+      operationId: getDowntimePareto
+      tags: [dashboard]
+      summary: Get downtime pareto analysis
+      parameters:
+        - name: equipmentId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: groupBy
+          in: query
+          schema:
+            type: string
+            enum: [detail, famille, type]
+            default: detail
+          description: "How to group downtime events: detail=by category, famille=by family, type=by planned/unplanned"
+        - name: isPlanned
+          in: query
+          schema:
+            type: boolean
+          description: "Filter by planned (true) or unplanned (false). Omit for all."
+      responses:
+        "200":
+          description: Downtime pareto data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DowntimeParetoItem"
+
+  /dashboard/equipment-comparison:
+    get:
+      operationId: getEquipmentComparison
+      tags: [dashboard]
+      summary: Compare TRS across equipments
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Equipment comparison data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EquipmentComparisonItem"
+
+  /dashboard/monthly-kpis:
+    get:
+      operationId: getMonthlyKpis
+      tags: [dashboard]
+      summary: Get monthly KPI breakdown (DO, TP, TQ, TRS)
+      parameters:
+        - name: equipmentId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Monthly KPIs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlyKpis"
+
+  /dashboard/pending-validations:
+    get:
+      operationId: getPendingValidations
+      tags: [dashboard]
+      summary: Get entries pending supervisor validation
+      responses:
+        "200":
+          description: Pending validations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductionEntryWithDetails"
+
+  # Monthly closures
+  /monthly-closures:
+    get:
+      operationId: listMonthlyClosures
+      tags: [monthly-closures]
+      summary: List monthly closures
+      parameters:
+        - name: year
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of monthly closures
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MonthlyClosure"
+    post:
+      operationId: createMonthlyClosure
+      tags: [monthly-closures]
+      summary: Lock a month after review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMonthlyClosureBody"
+      responses:
+        "201":
+          description: Month locked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlyClosure"
+
+  # Planning
+  /planning/parse:
+    post:
+      operationId: parsePlanningFile
+      tags: [planning]
+      summary: Parse an Excel planning file and return structured preview
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required: [file]
+      responses:
+        "200":
+          description: Parsed planning preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParsedPlanningResult"
+
+  /planning/import:
+    post:
+      operationId: importPlanning
+      tags: [planning]
+      summary: Import parsed planning rows into the database
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportPlanningBody"
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imported:
+                    type: integer
+                required: [imported]
+
+  /planning:
+    get:
+      operationId: listPlanning
+      tags: [planning]
+      summary: List production plans
+      parameters:
+        - name: week
+          in: query
+          schema:
+            type: integer
+        - name: year
+          in: query
+          schema:
+            type: integer
+        - name: date
+          in: query
+          schema:
+            type: string
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of plan entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlanEntry"
+
+  /planning/today:
+    get:
+      operationId: getTodayPlanning
+      tags: [planning]
+      summary: Get today's production plans
+      responses:
+        "200":
+          description: Today's plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlanEntry"
+
+  /planning/weeks:
+    get:
+      operationId: listPlanningWeeks
+      tags: [planning]
+      summary: List distinct imported weeks
+      responses:
+        "200":
+          description: List of imported weeks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlanWeekSummary"
+
+  /planning/{id}/validate:
+    patch:
+      operationId: validatePlanEntry
+      tags: [planning]
+      summary: Validate or reject a plan entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidatePlanBody"
+      responses:
+        "200":
+          description: Updated plan status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  validationStatus:
+                    type: string
+                required: [id, validationStatus]
+
+  # Notifications
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List notifications
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: severity
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NotificationItem"
+    post:
+      operationId: createNotification
+      tags: [notifications]
+      summary: Create a notification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNotificationBody"
+      responses:
+        "201":
+          description: Created notification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationItem"
+
+  /notifications/{id}:
+    patch:
+      operationId: updateNotification
+      tags: [notifications]
+      summary: Acknowledge or close a notification
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationBody"
+      responses:
+        "200":
+          description: Updated notification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationItem"
+    delete:
+      operationId: deleteNotification
+      tags: [notifications]
+      summary: Delete a notification (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Deleted
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    # Auth
+    LoginBody:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required: [email, password]
+
+    LoginResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+      required: [user, token]
+
+    # User
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        role:
+          type: string
+          enum: [operator, supervisor, admin]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, email, firstName, lastName, role, isActive, createdAt]
+
+    CreateUserBody:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        role:
+          type: string
+          enum: [operator, supervisor, admin]
+      required: [email, password, firstName, lastName, role]
+
+    UpdateUserBody:
+      type: object
+      properties:
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        role:
+          type: string
+          enum: [operator, supervisor, admin]
+        isActive:
+          type: boolean
+        password:
+          type: string
+
+    # Equipment
+    Equipment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: ["string", "null"]
+        trsObjective:
+          type: number
+          description: Target TRS percentage (0-100)
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, code, trsObjective, isActive, createdAt]
+
+    CreateEquipmentBody:
+      type: object
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+        trsObjective:
+          type: number
+      required: [name, code, trsObjective]
+
+    UpdateEquipmentBody:
+      type: object
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+        trsObjective:
+          type: number
+        isActive:
+          type: boolean
+
+    # Product
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, code, isActive, createdAt]
+
+    CreateProductBody:
+      type: object
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+      required: [name, code]
+
+    UpdateProductBody:
+      type: object
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        description:
+          type: string
+        isActive:
+          type: boolean
+
+    # Cadence
+    Cadence:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        equipmentId:
+          type: string
+          format: uuid
+        theoreticalCadence:
+          type: number
+          description: Theoretical cadence (units/hour)
+        validatedCadence:
+          type: number
+          description: Validated product cadence (units/hour)
+        unit:
+          type: string
+          description: Unit (blisters/min, capsules/min, etc.)
+        productName:
+          type: ["string", "null"]
+        equipmentName:
+          type: ["string", "null"]
+      required: [id, productId, equipmentId, theoreticalCadence, validatedCadence, unit]
+
+    UpsertCadenceBody:
+      type: object
+      properties:
+        productId:
+          type: string
+          format: uuid
+        equipmentId:
+          type: string
+          format: uuid
+        theoreticalCadence:
+          type: number
+        validatedCadence:
+          type: number
+        unit:
+          type: string
+      required: [productId, equipmentId, theoreticalCadence, validatedCadence, unit]
+
+    # Downtime Category
+    DowntimeCategory:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        label:
+          type: string
+        description:
+          type: ["string", "null"]
+        famille:
+          type: ["string", "null"]
+          description: "Family grouping: Arrêts non planifiés | Problèmes de qualité | Arrêt technique | Attente et transition | Utilités"
+        impactType:
+          type: string
+          enum: [tO, tR, tF, tN, tU, TQ]
+          description: Which time dimension this category impacts
+        isPlanned:
+          type: boolean
+          description: Whether this is a planned stop
+        requiresComment:
+          type: boolean
+        isActive:
+          type: boolean
+      required: [id, code, label, impactType, isPlanned, requiresComment, isActive]
+
+    CreateDowntimeCategoryBody:
+      type: object
+      properties:
+        code:
+          type: string
+        label:
+          type: string
+        description:
+          type: string
+        famille:
+          type: string
+          description: "Family grouping for this stop category"
+        impactType:
+          type: string
+          enum: [tO, tR, tF, tN, tU, TQ]
+        isPlanned:
+          type: boolean
+        requiresComment:
+          type: boolean
+      required: [code, label, impactType, isPlanned, requiresComment]
+
+    UpdateDowntimeCategoryBody:
+      type: object
+      properties:
+        code:
+          type: string
+        label:
+          type: string
+        description:
+          type: string
+        famille:
+          type: string
+          description: "Family grouping for this stop category"
+        impactType:
+          type: string
+          enum: [tO, tR, tF, tN, tU, TQ]
+        isPlanned:
+          type: boolean
+        requiresComment:
+          type: boolean
+        isActive:
+          type: boolean
+
+    # Downtime Event
+    DowntimeEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        entryId:
+          type: string
+          format: uuid
+        categoryId:
+          type: string
+          format: uuid
+        categoryCode:
+          type: ["string", "null"]
+        categoryLabel:
+          type: ["string", "null"]
+        startTime:
+          type: string
+          description: HH:MM time string
+        endTime:
+          type: string
+          description: HH:MM time string
+        durationMinutes:
+          type: integer
+        comment:
+          type: ["string", "null"]
+        isDeleted:
+          type: boolean
+      required: [id, entryId, categoryId, startTime, endTime, durationMinutes, isDeleted]
+
+    CreateDowntimeEventBody:
+      type: object
+      properties:
+        entryId:
+          type: string
+          format: uuid
+        categoryId:
+          type: string
+          format: uuid
+        startTime:
+          type: string
+        endTime:
+          type: string
+        comment:
+          type: string
+      required: [entryId, categoryId, startTime, endTime]
+
+    UpdateDowntimeEventBody:
+      type: object
+      properties:
+        categoryId:
+          type: string
+          format: uuid
+        startTime:
+          type: string
+        endTime:
+          type: string
+        comment:
+          type: string
+
+    # Production Entry
+    ProductionEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+        equipmentId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        batchNumber:
+          type: string
+        shift:
+          type: string
+        shiftStart:
+          type: string
+          description: HH:MM
+        shiftEnd:
+          type: string
+          description: HH:MM
+        quantityProduced:
+          type: integer
+        quantityConforming:
+          type: integer
+        quantityRejected:
+          type: integer
+        status:
+          type: string
+          enum: [draft, submitted, validated, rejected]
+        operatorId:
+          type: string
+          format: uuid
+        supervisorId:
+          type: ["string", "null"]
+        supervisorComment:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, date, equipmentId, productId, batchNumber, shift, shiftStart, shiftEnd, quantityProduced, quantityConforming, quantityRejected, status, operatorId, createdAt, updatedAt]
+
+    ProductionEntryWithDetails:
+      allOf:
+        - $ref: "#/components/schemas/ProductionEntry"
+        - type: object
+          properties:
+            equipmentName:
+              type: ["string", "null"]
+            productName:
+              type: ["string", "null"]
+            operatorName:
+              type: ["string", "null"]
+            downtimeEvents:
+              type: array
+              items:
+                $ref: "#/components/schemas/DowntimeEvent"
+            trsMetrics:
+              $ref: "#/components/schemas/TrsMetrics"
+
+    CreateProductionEntryBody:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        equipmentId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        batchNumber:
+          type: string
+        shift:
+          type: string
+        shiftStart:
+          type: string
+        shiftEnd:
+          type: string
+        quantityProduced:
+          type: integer
+        quantityConforming:
+          type: integer
+        quantityRejected:
+          type: integer
+      required: [date, equipmentId, productId, batchNumber, shift, shiftStart, shiftEnd, quantityProduced, quantityConforming, quantityRejected]
+
+    UpdateProductionEntryBody:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        equipmentId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        batchNumber:
+          type: string
+        shift:
+          type: string
+        shiftStart:
+          type: string
+        shiftEnd:
+          type: string
+        quantityProduced:
+          type: integer
+        quantityConforming:
+          type: integer
+        quantityRejected:
+          type: integer
+
+    ValidateEntryBody:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [validate, reject]
+        comment:
+          type: string
+      required: [action]
+
+    # TRS Metrics
+    TrsMetrics:
+      type: object
+      properties:
+        tT:
+          type: number
+          description: Temps total calendrier (minutes)
+        tO:
+          type: number
+          description: Temps d'ouverture (minutes)
+        tR:
+          type: number
+          description: Temps requis (minutes)
+        tF:
+          type: number
+          description: Temps de fonctionnement (minutes)
+        tN:
+          type: number
+          description: Temps net (minutes)
+        tU:
+          type: number
+          description: Temps utile (minutes)
+        DO:
+          type: number
+          description: Disponibilite operationnelle (0-1)
+        TP:
+          type: number
+          description: Taux de performance (0-1)
+        TQ:
+          type: number
+          description: Taux qualite (0-1)
+        TRS:
+          type: number
+          description: TRS = DO x TP x TQ (0-1)
+        TRG:
+          type: number
+          description: TRG = tU / tO (0-1)
+        TRE:
+          type: number
+          description: TRE = tU / tT (0-1)
+        plannedDowntimeMinutes:
+          type: number
+        unplannedDowntimeMinutes:
+          type: number
+        cadenceGap:
+          type: number
+          description: Gap between validated and actual cadence
+      required: [tT, tO, tR, tF, tN, tU, DO, TP, TQ, TRS, TRG, TRE, plannedDowntimeMinutes, unplannedDowntimeMinutes, cadenceGap]
+
+    # Dashboard types
+    DashboardSummary:
+      type: object
+      properties:
+        currentMonthTrs:
+          type: number
+        currentMonthDO:
+          type: number
+        currentMonthTP:
+          type: number
+        currentMonthTQ:
+          type: number
+        currentMonthTRG:
+          type: ["number", "null"]
+          description: TRG = tU / tO (0-100)
+        trsObjective:
+          type: number
+        entriesThisMonth:
+          type: integer
+        pendingValidations:
+          type: integer
+        validatedEntries:
+          type: integer
+        rejectedEntries:
+          type: integer
+        productionDays:
+          type: integer
+        offDays:
+          type: integer
+        totalQuantityProduced:
+          type: integer
+        totalQuantityConforming:
+          type: integer
+        totalRejected:
+          type: integer
+      required: [currentMonthTrs, currentMonthDO, currentMonthTP, currentMonthTQ, trsObjective, entriesThisMonth, pendingValidations, validatedEntries, rejectedEntries, productionDays, offDays, totalQuantityProduced, totalQuantityConforming, totalRejected]
+
+    DailyTrsPoint:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        trs:
+          type: ["number", "null"]
+        trsObjective:
+          type: number
+        DO:
+          type: ["number", "null"]
+        TP:
+          type: ["number", "null"]
+        TQ:
+          type: ["number", "null"]
+        TRG:
+          type: ["number", "null"]
+          description: TRG = tU / tO (0-100)
+        isOffDay:
+          type: boolean
+        hasProduction:
+          type: boolean
+        equipmentId:
+          type: ["string", "null"]
+        equipmentName:
+          type: ["string", "null"]
+      required: [date, trsObjective, isOffDay, hasProduction]
+
+    DowntimeParetoItem:
+      type: object
+      properties:
+        categoryCode:
+          type: string
+        categoryLabel:
+          type: string
+        famille:
+          type: ["string", "null"]
+        totalMinutes:
+          type: integer
+        occurrences:
+          type: integer
+        percentage:
+          type: number
+        cumulativePercentage:
+          type: number
+        isPlanned:
+          type: boolean
+      required: [categoryCode, categoryLabel, totalMinutes, occurrences, percentage, cumulativePercentage, isPlanned]
+
+    EquipmentComparisonItem:
+      type: object
+      properties:
+        equipmentId:
+          type: string
+          format: uuid
+        equipmentName:
+          type: string
+        trs:
+          type: ["number", "null"]
+        DO:
+          type: ["number", "null"]
+        TP:
+          type: ["number", "null"]
+        TQ:
+          type: ["number", "null"]
+        TRG:
+          type: ["number", "null"]
+          description: TRG = tU / tO (0-100)
+        trsObjective:
+          type: number
+        productionDays:
+          type: integer
+      required: [equipmentId, equipmentName, trsObjective, productionDays]
+
+    MonthlyKpis:
+      type: object
+      properties:
+        month:
+          type: integer
+        year:
+          type: integer
+        trs:
+          type: ["number", "null"]
+        DO:
+          type: ["number", "null"]
+        TP:
+          type: ["number", "null"]
+        TQ:
+          type: ["number", "null"]
+        TRG:
+          type: ["number", "null"]
+        TRE:
+          type: ["number", "null"]
+        trsObjective:
+          type: number
+        totalTR:
+          type: number
+          description: Total temps requis for the month (minutes)
+        totalTU:
+          type: number
+          description: Total temps utile for the month (minutes)
+        totalTF:
+          type: number
+        totalTN:
+          type: number
+        totalDowntimePlanned:
+          type: number
+        totalDowntimeUnplanned:
+          type: number
+      required: [month, year, trsObjective, totalTR, totalTU, totalTF, totalTN, totalDowntimePlanned, totalDowntimeUnplanned]
+
+    # Monthly closures
+    MonthlyClosure:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        month:
+          type: integer
+        year:
+          type: integer
+        equipmentId:
+          type: ["string", "null"]
+        lockedById:
+          type: string
+          format: uuid
+        lockedByName:
+          type: ["string", "null"]
+        lockedAt:
+          type: string
+          format: date-time
+        comment:
+          type: ["string", "null"]
+      required: [id, month, year, lockedById, lockedAt]
+
+    CreateMonthlyClosureBody:
+      type: object
+      properties:
+        month:
+          type: integer
+        year:
+          type: integer
+        equipmentId:
+          type: string
+          format: uuid
+        comment:
+          type: string
+      required: [month, year]
+
+    # Planning
+    PlanRow:
+      type: object
+      properties:
+        weekNumber:
+          type: integer
+        year:
+          type: integer
+        date:
+          type: string
+        dayName:
+          type: string
+        activityType:
+          type: string
+        team:
+          type: ["string", "null"]
+        equipment:
+          type: ["string", "null"]
+        room:
+          type: ["string", "null"]
+        productName:
+          type: ["string", "null"]
+        lotNumber:
+          type: ["string", "null"]
+        plannedQuantity:
+          type: ["number", "null"]
+        plannedUnit:
+          type: ["string", "null"]
+        specialActivity:
+          type: ["string", "null"]
+      required: [weekNumber, year, date, dayName, activityType]
+
+    ParsedPlanningResult:
+      type: object
+      properties:
+        weekNumber:
+          type: integer
+        year:
+          type: integer
+        fileName:
+          type: string
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlanRow"
+        anomalies:
+          type: array
+          items:
+            type: string
+      required: [weekNumber, year, fileName, rows, anomalies]
+
+    ImportPlanningBody:
+      type: object
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlanRow"
+        fileName:
+          type: string
+      required: [rows, fileName]
+
+    PlanEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        weekNumber:
+          type: integer
+        year:
+          type: integer
+        date:
+          type: string
+        dayName:
+          type: string
+        activityType:
+          type: string
+        team:
+          type: ["string", "null"]
+        equipment:
+          type: ["string", "null"]
+        room:
+          type: ["string", "null"]
+        productName:
+          type: ["string", "null"]
+        lotNumber:
+          type: ["string", "null"]
+        plannedQuantity:
+          type: ["number", "null"]
+        plannedUnit:
+          type: ["string", "null"]
+        specialActivity:
+          type: ["string", "null"]
+        sourceFileName:
+          type: string
+        importedAt:
+          type: string
+          format: date-time
+        validationStatus:
+          type: string
+        importedByName:
+          type: ["string", "null"]
+      required: [id, weekNumber, year, date, dayName, activityType, sourceFileName, importedAt, validationStatus]
+
+    PlanWeekSummary:
+      type: object
+      properties:
+        weekNumber:
+          type: integer
+        year:
+          type: integer
+        sourceFileName:
+          type: string
+        importedAt:
+          type: string
+          format: date-time
+      required: [weekNumber, year, sourceFileName, importedAt]
+
+    ValidatePlanBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [validated, rejected]
+        comment:
+          type: string
+      required: [status]
+
+    # Notifications
+    NotificationItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        equipment:
+          type: ["string", "null"]
+        room:
+          type: ["string", "null"]
+        product:
+          type: ["string", "null"]
+        lot:
+          type: ["string", "null"]
+        message:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        acknowledgedAt:
+          type: ["string", "null"]
+          format: date-time
+        closedAt:
+          type: ["string", "null"]
+          format: date-time
+        status:
+          type: string
+          enum: [open, acknowledged, closed]
+        comment:
+          type: ["string", "null"]
+      required: [id, type, severity, message, createdAt, status]
+
+    CreateNotificationBody:
+      type: object
+      properties:
+        type:
+          type: string
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        equipment:
+          type: string
+        room:
+          type: string
+        product:
+          type: string
+        lot:
+          type: string
+        message:
+          type: string
+      required: [type, message]
+
+    UpdateNotificationBody:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [acknowledge, close]
+        comment:
+          type: string
+      required: [action]
