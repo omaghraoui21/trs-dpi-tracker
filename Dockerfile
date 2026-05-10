@@ -1,9 +1,10 @@
 # ─── Stage 1: deps ────────────────────────────────────────────────────────────
-# node:20-slim (Debian/glibc) is required — NOT alpine (musl).
+# node:22-slim (Debian/glibc) is required — NOT alpine (musl).
 # bcrypt ships prebuilt binaries only for glibc. On musl/alpine the native
 # addon would need to be compiled from source, which requires python + make +
 # gcc and is fragile. slim gives us a small image (~200 MB) without that risk.
-FROM node:20-slim AS deps
+# Node 22 is also required by pnpm@latest (v11+) which uses node:sqlite internally.
+FROM node:22-slim AS deps
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
@@ -36,7 +37,7 @@ RUN pnpm --filter @workspace/api-server run build
 
 
 # ─── Stage 3: runtime ─────────────────────────────────────────────────────────
-FROM node:20-slim AS runtime
+FROM node:22-slim AS runtime
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
