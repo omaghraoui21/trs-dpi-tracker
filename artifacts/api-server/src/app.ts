@@ -8,7 +8,7 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
-// Trust the reverse proxy (Replit proxy sends X-Forwarded-For)
+// Trust the reverse proxy (Railway / Vercel / any cloud reverse proxy)
 app.set("trust proxy", 1);
 
 // Security headers
@@ -19,19 +19,33 @@ app.use(
   })
 );
 
-// CORS — allow the Replit proxy domain and localhost dev
-const allowedOrigins: (string | RegExp)[] = [
-  /\.replit\.dev$/,
-  /\.replit\.app$/,
-  /^http:\/\/localhost(:\d+)?$/,
-];
+// ─── CORS ────────────────────────────────────────────────────────────────────
+// Configure allowed origins via ALLOWED_ORIGINS env var (comma-separated).
+// Example: ALLOWED_ORIGINS=https://my-app.vercel.app,https://my-custom-domain.com
+//
+// Fallback when env var is absent: localhost only (safe for local dev).
+// Always allows requests with no Origin header (server-to-server, curl, mobile).
+function buildAllowedOrigins(): (string | RegExp)[] {
+  const raw = process.env.ALLOWED_ORIGINS;
+  const base: (string | RegExp)[] = [/^http:\/\/localhost(:\d+)?$/];
+  if (!raw) return base;
+  const extra = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => s as string);
+  return [...base, ...extra];
+}
+
+const allowedOrigins = buildAllowedOrigins();
+
 app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (server-to-server, curl, mobile apps)
       if (!origin) return callback(null, true);
-      const allowed = allowedOrigins.some(pattern =>
-        typeof pattern === "string" ? pattern === origin : pattern.test(origin)
+      const allowed = allowedOrigins.some((pattern) =>
+        typeof pattern === "string" ? pattern === origin : pattern.test(origin),
       );
       callback(allowed ? null : new Error("Not allowed by CORS"), allowed);
     },
