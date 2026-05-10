@@ -1,0 +1,24 @@
+# Backend — deployed separately on Railway
+artifacts/api-server
+
+# Dev-only UI sandbox
+artifacts/mockup-sandbox
+
+# Database scripts — run manually against Supabase
+database
+scripts
+
+# Docs
+docs
+
+# Replit config
+.replit
+.replitignore
+replit.md
+.agents
+
+# QA
+qa
+
+# Test artifacts
+coverage
