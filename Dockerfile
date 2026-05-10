@@ -20,6 +20,7 @@ COPY lib/api-zod/package.json           lib/api-zod/
 COPY lib/api-spec/package.json          lib/api-spec/
 COPY lib/api-client-react/package.json  lib/api-client-react/
 COPY artifacts/api-server/package.json  artifacts/api-server/
+COPY scripts/package.json               scripts/
 
 RUN pnpm install --frozen-lockfile
 
@@ -46,7 +47,10 @@ WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY lib/db/package.json                lib/db/
 COPY lib/api-zod/package.json           lib/api-zod/
+COPY lib/api-spec/package.json          lib/api-spec/
+COPY lib/api-client-react/package.json  lib/api-client-react/
 COPY artifacts/api-server/package.json  artifacts/api-server/
+COPY scripts/package.json               scripts/
 
 # --prod installs only production deps; scripts ARE needed so bcrypt's native
 # addon gets properly linked from the prebuilt binaries.
