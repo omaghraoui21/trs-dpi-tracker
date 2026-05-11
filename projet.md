@@ -150,7 +150,7 @@ https://api-server-production-022c.up.railway.app
 
 Et ne contient plus le pattern problématique `BASE_URL.replace`.
 
-## Probleme restant
+## Probleme HTTP 500 traite
 
 L'utilisateur indique maintenant:
 
@@ -159,15 +159,74 @@ Erreur de chargement
 HTTP 500 : Internal server error
 ```
 
-Ce n'est plus le même problème que `Unexpected token '<'`.
+Ce n'etait plus le même problème que `Unexpected token '<'`.
 
 Interprétation:
 
 - Le frontend appelle maintenant bien Railway.
-- Railway renvoie un vrai `500` sur un endpoint applicatif.
-- Il faut identifier quelle route exacte échoue et lire les logs Railway associés.
+- Railway renvoyait un vrai `500` sur plusieurs endpoints applicatifs.
+- Cause racine: le schema Supabase applique depuis `database/schema.sql` etait plus ancien que le backend deploye. Plusieurs tables/colonnes attendues par les routes n'existaient pas encore.
 
-## Prochain diagnostic recommande
+Routes qui renvoyaient `500` avant hotfix:
+
+```text
+GET /api/downtime-categories
+GET /api/formulas
+GET /api/kpi-targets
+GET /api/planning-mappings
+GET /api/notification-rules
+GET /api/admin/config-status
+GET /api/dashboard/summary?month=5&year=2026
+GET /api/dashboard/daily-trs?month=5&year=2026
+GET /api/dashboard/equipment-comparison?month=5&year=2026
+GET /api/dashboard/monthly-kpis?month=5&year=2026
+GET /api/calendar-events?year=2026
+GET /api/calendar-events/impact?year=2026&month=5
+```
+
+Exemple de manque confirme:
+
+```text
+downtime_categories.famille
+downtime_categories.is_quick_shortcut
+downtime_categories.shortcut_equipments
+```
+
+Tables manquantes ajoutees:
+
+```text
+calculation_formulas
+calculation_formula_tests
+kpi_targets
+planning_activity_mappings
+notification_rules
+annual_calendar_events
+daily_entries
+standard_times
+product_presentations
+assembly_boms
+```
+
+Colonne ajoutee:
+
+```text
+production_entries.daily_entry_id
+```
+
+Migration appliquee via Supabase Management API:
+
+```text
+database/production-hotfix-2026-05-11.sql
+```
+
+Retest apres migration:
+
+```text
+Toutes les routes listees ci-dessus repondent 200 OK.
+Healthcheck Railway: status=ok, db=ok.
+```
+
+## Prochain diagnostic recommande si une erreur reapparait
 
 1. Reproduire dans le navigateur avec DevTools > Network.
 2. Trouver la requête qui retourne `500`.
@@ -213,4 +272,3 @@ query($deploymentId: String!) {
 - Ne pas stocker le mot de passe admin dans le repo.
 - Le build local Windows a été bloqué par une dépendance optionnelle Rollup manquante (`@rollup/rollup-win32-x64-msvc`), mais Vercel Linux a buildé correctement après push GitHub.
 - Le dossier local contient aussi `ops/fix-prod.ps1`, script opérationnel local non poussé à ce stade.
-
