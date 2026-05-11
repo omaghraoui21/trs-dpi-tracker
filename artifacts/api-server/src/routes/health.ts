@@ -35,7 +35,9 @@ router.get("/healthz", async (_req, res) => {
     ...(dbLatencyMs !== null && { dbLatencyMs }),
   };
 
-  res.status(status === "ok" ? 200 : 503).json(body);
+  // Always return 200 — Railway healthcheck is a liveness probe.
+  // DB degradation is surfaced in the body but must not kill the container.
+  res.status(200).json(body);
 });
 
 export default router;

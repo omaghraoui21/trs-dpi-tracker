@@ -24,7 +24,10 @@ export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 10,                  // max concurrent connections per Railway instance
   idleTimeoutMillis: 30_000, // release idle connections after 30 s
-  connectionTimeoutMillis: 5_000, // fail fast if DB is unreachable
+  connectionTimeoutMillis: 10_000, // fail fast if DB is unreachable
+  // Supabase pooler uses a self-signed cert that fails pg v8's verify-full check.
+  // rejectUnauthorized: false keeps the connection encrypted but skips cert validation.
+  ssl: { rejectUnauthorized: false },
 });
 
 export const db = drizzle(pool, { schema });
