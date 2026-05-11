@@ -32,9 +32,10 @@ import { cn } from "@/lib/utils";
 import ExportModal from "@/components/ExportModal";
 
 // ─── API helper ──────────────────────────────────────────
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 function getToken() { return localStorage.getItem("auth_token") ?? ""; }
 async function apiFetch<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${API_BASE}/api${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",

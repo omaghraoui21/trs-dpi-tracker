@@ -101,6 +101,7 @@ const QUICK_DT_CODES: Record<string, string[]> = {
   A28: ["AB", "CHG_ALU", "CHG_PVC", "NET_MIN_EQ"],
 };
 const FALLBACK_DT_CODES = ["ATTENTE-MAT", "NET_MIN_EQ", "PAUSE", "CHSG"];
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
 function fmtCadence(c: number, cfg: EquipCfg): string {
   if (c <= 0) return "—";
@@ -127,7 +128,7 @@ function computeWeightedCadence(
 
 async function apiFetch<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem("auth_token");
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${API_BASE}/api${path}`, {
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),

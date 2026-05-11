@@ -32,6 +32,7 @@ const MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Aoû
 const IMPACT_TYPES = ["tO","tR","tF","tN","tU","TQ"];
 const KPI_CODES = ["TRS","TRG","TRE","DO","TP","TQ","PLANNING"];
 const FAMILLE_OPTIONS = ["Arrêts non planifiés","Problèmes de qualité","Arrêt technique","Attente et transition","Utilités"] as const;
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
 // ─── Shared helpers ────────────────────────────────────────
 function roleBadge(role: string) {
@@ -68,7 +69,7 @@ function getAuthHeader(): Record<string,string> {
 }
 
 async function apiFetch(url: string, method = "GET", body?: unknown) {
-  const res = await fetch(url, {
+  const res = await fetch(`${API_BASE}${url}`, {
     method,
     headers: { "Content-Type": "application/json", ...getAuthHeader() },
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -78,7 +79,7 @@ async function apiFetch(url: string, method = "GET", body?: unknown) {
 }
 
 async function apiDelete(url: string) {
-  const res = await fetch(url, {
+  const res = await fetch(`${API_BASE}${url}`, {
     method: "DELETE",
     headers: { "Content-Type": "application/json", ...getAuthHeader() },
   });

@@ -17,6 +17,7 @@ const MONTHS = [
   "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
   "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
 ];
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
 const FAMILLE_COLORS: Record<string, string> = {
   "Arrêts non planifiés": "#ef4444",
@@ -96,7 +97,7 @@ interface DailySummaryResult {
 // ─── Helper fetch authentifié ────────────────────────────────────────────────
 async function apiGet<T>(path: string): Promise<T> {
   const token = localStorage.getItem("auth_token");
-  const res = await fetch(path, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  const res = await fetch(`${API_BASE}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
   if (!res.ok) throw new Error(res.statusText);
   return res.json();
 }

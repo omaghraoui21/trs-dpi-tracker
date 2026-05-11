@@ -30,6 +30,7 @@ const FORMAT_OPTIONS: { value: ExportFormat; label: string; description: string;
   { value: "technical",  label: "Rapport technique",       description: "Dashboard TRS + Arrêts + Pareto + Statut équipements" },
   { value: "rawdata",    label: "Données brutes",          description: "Export CSV-style des entrées validées + paramètres" },
 ];
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
 function getISODate(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -76,7 +77,7 @@ export default function ExportModal({ open, onOpenChange, equipments = [] }: Exp
     setErrorMsg("");
     try {
       const token = localStorage.getItem("auth_token");
-      const res = await fetch("/api/reports/export", {
+      const res = await fetch(`${API_BASE}/api/reports/export`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useListEquipments } from "@workspace/api-client-react";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
 function apiHeaders(): Record<string, string> {
   const token = localStorage.getItem("auth_token");

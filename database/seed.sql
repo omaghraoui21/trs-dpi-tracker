@@ -29,6 +29,14 @@ ON CONFLICT DO NOTHING;
 INSERT INTO equipments (id, site_id, room_id, code, name, equipment_type, trs_objective)
 SELECT gen_random_uuid(), s.id, rm.id, e.code, e.name, e.equipment_type, e.trs_objective
 FROM sites s
+JOIN
+(VALUES
+  ('GEL-001', 'Géluleuse Harro Höfliger',           'geluleuse',      75.00),
+  ('BLI-001', 'Blistereuse IMA TR135 S',             'blistereuse',    75.00),
+  ('LCS-001', 'Ligne conditionnement secondaire 1',  'conditionnement', 70.00),
+  ('LCS-002', 'Ligne conditionnement secondaire 2',  'conditionnement', 70.00)
+) AS e(code, name, equipment_type, trs_objective)
+ON true
 JOIN rooms rm ON rm.site_id = s.id AND rm.code = (
   CASE e.code
     WHEN 'GEL-001' THEN 'A23'
@@ -36,13 +44,7 @@ JOIN rooms rm ON rm.site_id = s.id AND rm.code = (
     WHEN 'LCS-001' THEN 'A20'
     WHEN 'LCS-002' THEN 'A20'
   END
-),
-(VALUES
-  ('GEL-001', 'Géluleuse Harro Höfliger',           'geluleuse',      75.00),
-  ('BLI-001', 'Blistereuse IMA TR135 S',             'blistereuse',    75.00),
-  ('LCS-001', 'Ligne conditionnement secondaire 1',  'conditionnement', 70.00),
-  ('LCS-002', 'Ligne conditionnement secondaire 2',  'conditionnement', 70.00)
-) AS e(code, name, equipment_type, trs_objective)
+)
 WHERE s.code = 'SITE-01'
 ON CONFLICT (code) DO NOTHING;
 
