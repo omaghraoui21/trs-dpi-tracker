@@ -19,8 +19,11 @@ router.get("/healthz", async (_req, res) => {
       new Promise((_, reject) => setTimeout(() => reject(new Error("DB probe timeout")), 2000)),
     ]);
     dbLatencyMs = Date.now() - t0;
-  } catch (err) {
-    logger.warn({ err }, "Health check DB probe failed");
+  } catch (error) {
+    logger.error('Health check DB probe failed', { 
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined 
+    });
     dbStatus = "error";
   }
 
