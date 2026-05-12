@@ -3,6 +3,7 @@ import { db, equipmentsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
 import { asyncHandler } from "../lib/async-handler";
+import { cache30 } from "../lib/cache-control";
 import {
   CreateEquipmentBody,
   UpdateEquipmentBody,
@@ -23,7 +24,7 @@ function formatEquipment(e: typeof equipmentsTable.$inferSelect) {
   };
 }
 
-router.get("/equipments", requireAuth, asyncHandler(async (_req, res) => {
+router.get("/equipments", requireAuth, cache30, asyncHandler(async (_req, res) => {
   const rows = await db.select().from(equipmentsTable).orderBy(equipmentsTable.name);
   res.json(rows.map(formatEquipment));
 }));

@@ -3,6 +3,7 @@ import { db, downtimeCategoriesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
 import { asyncHandler } from "../lib/async-handler";
+import { cache30 } from "../lib/cache-control";
 import {
   CreateDowntimeCategoryBody,
   UpdateDowntimeCategoryBody,
@@ -27,7 +28,7 @@ function formatCategory(c: typeof downtimeCategoriesTable.$inferSelect) {
   };
 }
 
-router.get("/downtime-categories", requireAuth, asyncHandler(async (_req, res) => {
+router.get("/downtime-categories", requireAuth, cache30, asyncHandler(async (_req, res) => {
   const rows = await db.select().from(downtimeCategoriesTable).orderBy(downtimeCategoriesTable.code);
   res.json(rows.map(formatCategory));
 }));

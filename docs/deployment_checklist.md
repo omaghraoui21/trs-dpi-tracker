@@ -167,3 +167,23 @@ curl -X POST https://[app].up.railway.app/api/auth/login \
 
 **Login renvoie 401**
 → Le seed n'a pas été exécuté, ou les mots de passe ne correspondent pas. Re-lancer `seed-prod`
+
+
+
+---
+
+## Étape 8 — Appliquer les migrations DB (index)
+
+Après le premier déploiement ou lors d'une mise à jour, exécuter dans **Supabase SQL Editor** :
+
+```sql
+-- Copier-coller le contenu de database/migrations/001_add_missing_indexes.sql
+```
+
+Ces index sont CONCURRENTLY — non-bloquants, peuvent tourner en prod sans downtime.
+
+**Pourquoi ces index ?**
+- `idx_monthly_closures_period` — `/api/monthly-closures?year=` sans scan séquentiel
+- `idx_cadences_equipment` — lookup cadences par équipement dans les calculs TRS
+- `idx_daily_entries_equipment_date` — requêtes mensuelles dashboard (getDailyBase)
+- `idx_production_entries_date_status` — filtres composites du dashboard (date + status)

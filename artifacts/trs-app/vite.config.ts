@@ -40,6 +40,29 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // ─── Manual chunks ──────────────────────────────────────────────────
+        // Split large third-party libs into separate cacheable chunks.
+        // recharts (~393kB) and radix-ui (~30+ packages) are loaded on most pages
+        // so they should be cached independently from app code.
+        manualChunks(id: string) {
+          if (id.includes("node_modules/recharts") || id.includes("node_modules/d3-")) {
+            return "recharts";
+          }
+          if (id.includes("node_modules/@radix-ui/")) {
+            return "radix";
+          }
+          if (
+            id.includes("node_modules/react/") ||
+            id.includes("node_modules/react-dom/") ||
+            id.includes("node_modules/scheduler/")
+          ) {
+            return "react-vendor";
+          }
+        },
+      },
+    },
   },
   server: {
     port,

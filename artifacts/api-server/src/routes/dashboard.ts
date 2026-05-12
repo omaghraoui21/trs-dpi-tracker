@@ -11,6 +11,7 @@ import {
 import { eq, and, gte, lte, inArray, or } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
 import { asyncHandler } from "../lib/async-handler";
+import { cache5 } from "../lib/cache-control";
 import {
   GetDashboardSummaryQueryParams,
   GetDailyTrsQueryParams,
@@ -196,7 +197,7 @@ async function getMonthlyTrsResult(
   };
 }
 
-router.get("/dashboard/summary", requireAuth, asyncHandler(async (req, res) => {
+router.get("/dashboard/summary", requireAuth, cache5, asyncHandler(async (req, res) => {
   const query = GetDashboardSummaryQueryParams.safeParse(req.query);
   const now = new Date();
   const month = (query.success && query.data.month) ? query.data.month : now.getMonth() + 1;
@@ -470,7 +471,7 @@ router.get("/dashboard/equipment-comparison", requireAuth, asyncHandler(async (r
   res.json(result);
 }));
 
-router.get("/dashboard/monthly-kpis", requireAuth, asyncHandler(async (req, res) => {
+router.get("/dashboard/monthly-kpis", requireAuth, cache5, asyncHandler(async (req, res) => {
   const query = GetMonthlyKpisQueryParams.safeParse(req.query);
   if (!query.success || !query.data.month || !query.data.year) {
     res.status(400).json({ error: "month and year are required" });
@@ -507,20 +508,14 @@ router.get("/dashboard/monthly-kpis", requireAuth, asyncHandler(async (req, res)
   });
 }));
 
+// ─── Batch pending-validations: 5 queries total instead of 3N ───────────────
+// Loads all submitted entries + their downtimes + cadences in parallel batch
+// queries, then assembles the response in memory.
 router.get("/dashboard/pending-validations", requireAuth, requireRole("supervisor", "admin"), asyncHandler(async (req, res) => {
-  const entries = await db
-    .select({ id: productionEntriesTable.id })
-    .from(productionEntriesTable)
-    .where(eq(productionEntriesTable.status, "submitted"))
-    .orderBy(productionEntriesTable.date);
-
-  const results = await Promise.all(entries.map(e => buildEntryWithDetails(e.id)));
-  res.json(results.filter(Boolean));
-}));
-
-async function buildEntryWithDetails(entryId: string) {
   const { usersTable, productsTable } = await import("@workspace/db");
-  const [entry] = await db
+
+  // Query 1: all submitted entries with joins (1 query)
+  const entries = await db
     .select({
       id: productionEntriesTable.id,
       date: productionEntriesTable.date,
@@ -548,73 +543,115 @@ async function buildEntryWithDetails(entryId: string) {
     .leftJoin(equipmentsTable, eq(productionEntriesTable.equipmentId, equipmentsTable.id))
     .leftJoin(productsTable, eq(productionEntriesTable.productId, productsTable.id))
     .leftJoin(usersTable, eq(productionEntriesTable.operatorId, usersTable.id))
-    .where(eq(productionEntriesTable.id, entryId));
+    .where(eq(productionEntriesTable.status, "submitted"))
+    .orderBy(productionEntriesTable.date);
 
-  if (!entry) return null;
+  if (entries.length === 0) { res.json([]); return; }
 
-  const downtimeRows = await db
-    .select({
-      id: downtimeEventsTable.id,
-      entryId: downtimeEventsTable.entryId,
-      categoryId: downtimeEventsTable.categoryId,
-      startTime: downtimeEventsTable.startTime,
-      endTime: downtimeEventsTable.endTime,
-      durationMinutes: downtimeEventsTable.durationMinutes,
-      comment: downtimeEventsTable.comment,
-      isDeleted: downtimeEventsTable.isDeleted,
-      categoryCode: downtimeCategoriesTable.code,
-      categoryLabel: downtimeCategoriesTable.label,
-      categoryIsPlanned: downtimeCategoriesTable.isPlanned,
-    })
-    .from(downtimeEventsTable)
-    .leftJoin(downtimeCategoriesTable, eq(downtimeEventsTable.categoryId, downtimeCategoriesTable.id))
-    .where(and(eq(downtimeEventsTable.entryId, entryId), eq(downtimeEventsTable.isDeleted, false)));
+  const entryIds = entries.map(e => e.id);
+  const uniqueEquipmentIds = [...new Set(entries.map(e => e.equipmentId))];
 
-  const [cadence] = await db.select().from(cadencesTable)
-    .where(and(eq(cadencesTable.productId, entry.productId), eq(cadencesTable.equipmentId, entry.equipmentId)));
+  // Queries 2 & 3 in parallel: all downtimes + all cadences (2 queries)
+  const [allDowntimes, allCadences] = await Promise.all([
+    db
+      .select({
+        id: downtimeEventsTable.id,
+        entryId: downtimeEventsTable.entryId,
+        categoryId: downtimeEventsTable.categoryId,
+        startTime: downtimeEventsTable.startTime,
+        endTime: downtimeEventsTable.endTime,
+        durationMinutes: downtimeEventsTable.durationMinutes,
+        comment: downtimeEventsTable.comment,
+        isDeleted: downtimeEventsTable.isDeleted,
+        categoryCode: downtimeCategoriesTable.code,
+        categoryLabel: downtimeCategoriesTable.label,
+        categoryIsPlanned: downtimeCategoriesTable.isPlanned,
+      })
+      .from(downtimeEventsTable)
+      .leftJoin(downtimeCategoriesTable, eq(downtimeEventsTable.categoryId, downtimeCategoriesTable.id))
+      .where(and(inArray(downtimeEventsTable.entryId, entryIds), eq(downtimeEventsTable.isDeleted, false))),
+    db
+      .select({
+        equipmentId: cadencesTable.equipmentId,
+        productId: cadencesTable.productId,
+        validatedCadence: cadencesTable.validatedCadence,
+      })
+      .from(cadencesTable)
+      .where(inArray(cadencesTable.equipmentId, uniqueEquipmentIds)),
+  ]);
 
-  const validatedCadence = cadence ? parseFloat(cadence.validatedCadence as unknown as string) : 0;
-  const plannedMinutes = downtimeRows.filter(d => d.categoryIsPlanned).reduce((s, d) => s + d.durationMinutes, 0);
-  const unplannedMinutes = downtimeRows.filter(d => !d.categoryIsPlanned).reduce((s, d) => s + d.durationMinutes, 0);
-  const shiftDur = shiftDurationMinutes(entry.shiftStart, entry.shiftEnd);
-  const trsMetrics = calculateTrs({ shiftDurationMinutes: shiftDur, plannedDowntimeMinutes: plannedMinutes, unplannedDowntimeMinutes: unplannedMinutes, quantityProduced: entry.quantityProduced, quantityConforming: entry.quantityConforming, validatedCadence });
+  // Build lookup maps (in memory)
+  const downtimesByEntry = new Map<string, typeof allDowntimes>();
+  for (const d of allDowntimes) {
+    const arr = downtimesByEntry.get(d.entryId) ?? [];
+    arr.push(d);
+    downtimesByEntry.set(d.entryId, arr);
+  }
 
-  return {
-    id: entry.id,
-    date: entry.date,
-    equipmentId: entry.equipmentId,
-    productId: entry.productId,
-    batchNumber: entry.batchNumber,
-    shift: entry.shift,
-    shiftStart: entry.shiftStart,
-    shiftEnd: entry.shiftEnd,
-    quantityProduced: entry.quantityProduced,
-    quantityConforming: entry.quantityConforming,
-    quantityRejected: entry.quantityRejected,
-    status: entry.status,
-    operatorId: entry.operatorId,
-    supervisorId: entry.supervisorId ?? null,
-    supervisorComment: entry.supervisorComment ?? null,
-    createdAt: entry.createdAt.toISOString(),
-    updatedAt: entry.updatedAt.toISOString(),
-    equipmentName: entry.equipmentName ?? null,
-    productName: entry.productName ?? null,
-    operatorName: entry.operatorFirstName && entry.operatorLastName ? `${entry.operatorFirstName} ${entry.operatorLastName}` : null,
-    downtimeEvents: downtimeRows.map(d => ({
-      id: d.id,
-      entryId: d.entryId,
-      categoryId: d.categoryId,
-      categoryCode: d.categoryCode ?? null,
-      categoryLabel: d.categoryLabel ?? null,
-      startTime: d.startTime,
-      endTime: d.endTime,
-      durationMinutes: d.durationMinutes,
-      comment: d.comment ?? null,
-      isDeleted: d.isDeleted,
-    })),
-    trsMetrics,
-  };
-}
+  const cadencesByPair = new Map<string, number>();
+  for (const c of allCadences) {
+    cadencesByPair.set(
+      `${c.equipmentId}:${c.productId}`,
+      parseFloat(c.validatedCadence as unknown as string),
+    );
+  }
+
+  // Assemble results in memory (0 additional queries)
+  const results = entries.map(entry => {
+    const downtimes = downtimesByEntry.get(entry.id) ?? [];
+    const validatedCadence = cadencesByPair.get(`${entry.equipmentId}:${entry.productId}`) ?? 0;
+    const plannedMinutes = downtimes.filter(d => d.categoryIsPlanned).reduce((s, d) => s + d.durationMinutes, 0);
+    const unplannedMinutes = downtimes.filter(d => !d.categoryIsPlanned).reduce((s, d) => s + d.durationMinutes, 0);
+    const shiftDur = shiftDurationMinutes(entry.shiftStart, entry.shiftEnd);
+    const trsMetrics = calculateTrs({
+      shiftDurationMinutes: shiftDur,
+      plannedDowntimeMinutes: plannedMinutes,
+      unplannedDowntimeMinutes: unplannedMinutes,
+      quantityProduced: entry.quantityProduced,
+      quantityConforming: entry.quantityConforming,
+      validatedCadence,
+    });
+    return {
+      id: entry.id,
+      date: entry.date,
+      equipmentId: entry.equipmentId,
+      productId: entry.productId,
+      batchNumber: entry.batchNumber,
+      shift: entry.shift,
+      shiftStart: entry.shiftStart,
+      shiftEnd: entry.shiftEnd,
+      quantityProduced: entry.quantityProduced,
+      quantityConforming: entry.quantityConforming,
+      quantityRejected: entry.quantityRejected,
+      status: entry.status,
+      operatorId: entry.operatorId,
+      supervisorId: entry.supervisorId ?? null,
+      supervisorComment: entry.supervisorComment ?? null,
+      createdAt: entry.createdAt.toISOString(),
+      updatedAt: entry.updatedAt.toISOString(),
+      equipmentName: entry.equipmentName ?? null,
+      productName: entry.productName ?? null,
+      operatorName: entry.operatorFirstName && entry.operatorLastName
+        ? `${entry.operatorFirstName} ${entry.operatorLastName}`
+        : null,
+      downtimeEvents: downtimes.map(d => ({
+        id: d.id,
+        entryId: d.entryId,
+        categoryId: d.categoryId,
+        categoryCode: d.categoryCode ?? null,
+        categoryLabel: d.categoryLabel ?? null,
+        startTime: d.startTime,
+        endTime: d.endTime,
+        durationMinutes: d.durationMinutes,
+        comment: d.comment ?? null,
+        isDeleted: d.isDeleted,
+      })),
+      trsMetrics,
+    };
+  });
+
+  res.json(results);
+}));
 
 // ─── Annual TRS (12 months) ───────────────────────────────────────────────────
 router.get("/dashboard/annual-trs", requireAuth, asyncHandler(async (req, res) => {
