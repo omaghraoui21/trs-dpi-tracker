@@ -12,7 +12,7 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "prepare": "husky",
+    "prepare": "node -e \"if (require('fs').existsSync('.git')) require('child_process').execFileSync('husky', { stdio: 'inherit' })\"",
     "validate:production": "pnpm run typecheck && pnpm run test && pnpm --filter @workspace/api-server run build && PORT=3001 BASE_PATH=/ pnpm --filter @workspace/trs-app run build && echo '\\n✅ All checks passed — Production build validated'"
   },
   "private": true,
