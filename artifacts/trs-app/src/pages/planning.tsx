@@ -16,13 +16,13 @@ import { useToast } from "@/hooks/use-toast";
 const BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
 function apiHeaders(): Record<string, string> {
-  const token = localStorage.getItem("auth_token");
-  return token ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" };
+  return { "Content-Type": "application/json" };
 }
 
 async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...opts,
+    credentials: "include",
     headers: { ...apiHeaders(), ...(opts.headers ?? {}) },
   });
   if (!res.ok) {
@@ -482,9 +482,11 @@ export default function PlanningPage() {
     mutationFn: async (file: File) => {
       const fd = new FormData();
       fd.append("file", file);
-      const token = localStorage.getItem("auth_token");
-      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch(`${BASE}/api/planning/parse`, { method: "POST", headers, body: fd });
+      const res = await fetch(`${BASE}/api/planning/parse`, {
+        method: "POST",
+        credentials: "include",
+        body: fd,
+      });
       if (!res.ok) { const e = await res.json().catch(() => ({ error: res.statusText })); throw new Error(e.error); }
       return res.json() as Promise<ParseResult>;
     },

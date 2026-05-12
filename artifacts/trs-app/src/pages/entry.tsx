@@ -127,14 +127,13 @@ function computeWeightedCadence(
 }
 
 async function apiFetch<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem("auth_token");
   const res = await fetch(`${API_BASE}/api${path}`, {
+    ...options,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
-    ...options,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));

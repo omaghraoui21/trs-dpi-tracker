@@ -96,8 +96,7 @@ interface DailySummaryResult {
 
 // ─── Helper fetch authentifié ────────────────────────────────────────────────
 async function apiGet<T>(path: string): Promise<T> {
-  const token = localStorage.getItem("auth_token");
-  const res = await fetch(`${API_BASE}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  const res = await fetch(`${API_BASE}${path}`, { credentials: "include" });
   if (!res.ok) throw new Error(res.statusText);
   return res.json();
 }

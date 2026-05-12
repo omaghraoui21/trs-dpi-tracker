@@ -63,15 +63,11 @@ function StatusBadge({ active }: { active: boolean }) {
     : <span className="flex items-center gap-1 text-muted-foreground text-xs"><XCircle className="h-3.5 w-3.5" />Inactif</span>;
 }
 
-function getAuthHeader(): Record<string,string> {
-  const token = localStorage.getItem("auth_token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 async function apiFetch(url: string, method = "GET", body?: unknown) {
   const res = await fetch(`${API_BASE}${url}`, {
     method,
-    headers: { "Content-Type": "application/json", ...getAuthHeader() },
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) throw new Error(await res.text());
@@ -81,7 +77,8 @@ async function apiFetch(url: string, method = "GET", body?: unknown) {
 async function apiDelete(url: string) {
   const res = await fetch(`${API_BASE}${url}`, {
     method: "DELETE",
-    headers: { "Content-Type": "application/json", ...getAuthHeader() },
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
   });
   if (!res.ok) throw new Error(await res.text());
 }

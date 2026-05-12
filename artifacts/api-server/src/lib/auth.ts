@@ -56,7 +56,13 @@ export async function getUserFromToken(token: string) {
   return user;
 }
 
-export function extractToken(authHeader?: string): string | null {
+export function extractToken(
+  authHeader?: string,
+  cookies?: Record<string, unknown>,
+): string | null {
+  const cookieToken = cookies?.["auth_token"];
+  if (typeof cookieToken === "string" && cookieToken.trim()) return cookieToken;
+
   if (!authHeader) return null;
   const parts = authHeader.split(" ");
   if (parts.length !== 2 || parts[0].toLowerCase() !== "bearer") return null;

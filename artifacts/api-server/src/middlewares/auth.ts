@@ -11,7 +11,7 @@ declare global {
 }
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
-  const token = extractToken(req.headers.authorization);
+  const token = extractToken(req.headers.authorization, req.cookies);
   if (!token) {
     res.status(401).json({ error: "Authentication required" });
     return;

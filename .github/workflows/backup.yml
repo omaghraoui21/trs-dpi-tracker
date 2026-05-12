@@ -1,0 +1,24 @@
+name: Backup Supabase DB
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump PostgreSQL
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          sudo apt-get install -y postgresql-client
+          pg_dump "$DATABASE_URL" --no-owner --no-acl -Fc -f backup_$(date +%Y%m%d_%H%M%S).dump
+
+      - name: Upload artifact (90 days retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_number }}
+          path: "*.dump"
+          retention-days: 90

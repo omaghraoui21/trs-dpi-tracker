@@ -76,12 +76,11 @@ export default function ExportModal({ open, onOpenChange, equipments = [] }: Exp
     setStatus("loading");
     setErrorMsg("");
     try {
-      const token = localStorage.getItem("auth_token");
       const res = await fetch(`${API_BASE}/api/reports/export`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           from,

@@ -35,7 +35,6 @@ export const LoginResponse = zod.object({
     isActive: zod.boolean(),
     createdAt: zod.coerce.date(),
   }),
-  token: zod.string(),
 });
 
 /**

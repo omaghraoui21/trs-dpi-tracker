@@ -18,15 +18,13 @@ import { useListEquipments } from "@workspace/api-client-react";
 const BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
 function apiHeaders(): Record<string, string> {
-  const token = localStorage.getItem("auth_token");
-  return token
-    ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
-    : { "Content-Type": "application/json" };
+  return { "Content-Type": "application/json" };
 }
 
 async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...opts,
+    credentials: "include",
     headers: { ...apiHeaders(), ...(opts.headers ?? {}) },
   });
   if (!res.ok) {

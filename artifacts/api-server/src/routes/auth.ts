@@ -7,6 +7,32 @@ import { LoginBody } from "@workspace/api-zod";
 import { writeAudit } from "../lib/audit";
 
 const router: IRouter = Router();
+const AUTH_COOKIE_NAME = "auth_token";
+const AUTH_COOKIE_MAX_AGE_MS = 8 * 60 * 60 * 1000;
+
+function getCookieSameSite(): "strict" | "lax" | "none" {
+  const configured = process.env.COOKIE_SAMESITE?.toLowerCase();
+  if (configured === "none" || configured === "lax") return configured;
+  return "strict";
+}
+
+function authCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: getCookieSameSite(),
+    maxAge: AUTH_COOKIE_MAX_AGE_MS,
+  } as const;
+}
+
+function clearAuthCookieOptions() {
+  const options = authCookieOptions();
+  return {
+    httpOnly: options.httpOnly,
+    secure: options.secure,
+    sameSite: options.sameSite,
+  } as const;
+}
 
 router.post("/auth/login", async (req, res): Promise<void> => {
   try {
@@ -27,6 +53,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
       return;
     }
     const token = await signToken({ sub: user.id, email: user.email, role: user.role });
+    res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions());
     writeAudit({ userId: user.id, tableName: "users", recordId: user.id, action: "login",
       newValues: { email: user.email, role: user.role } });
     res.json({
@@ -39,7 +66,6 @@ router.post("/auth/login", async (req, res): Promise<void> => {
         isActive: user.isActive,
         createdAt: user.createdAt.toISOString(),
       },
-      token,
     });
   } catch (err) {
     req.log.error({ err }, "Login error");
@@ -48,6 +74,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
 });
 
 router.post("/auth/logout", (_req, res): void => {
+  res.clearCookie(AUTH_COOKIE_NAME, clearAuthCookieOptions());
   res.json({ success: true });
 });
 

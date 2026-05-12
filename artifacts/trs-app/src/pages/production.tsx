@@ -11,11 +11,14 @@ import { useToast } from "@/hooks/use-toast";
 
 const BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 function apiHeaders(): Record<string, string> {
-  const token = localStorage.getItem("auth_token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return {};
 }
 async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { ...opts, headers: { ...apiHeaders(), ...(opts.headers ?? {}) } });
+  const res = await fetch(`${BASE}${path}`, {
+    ...opts,
+    credentials: "include",
+    headers: { ...apiHeaders(), ...(opts.headers ?? {}) },
+  });
   if (!res.ok) { const e = await res.json().catch(() => ({ error: res.statusText })); throw new Error(e.error ?? res.statusText); }
   if (res.status === 204) return undefined as T;
   return res.json();
