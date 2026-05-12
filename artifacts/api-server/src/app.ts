@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
 import pinoHttp from "pino-http";
+import { randomUUID } from "node:crypto";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
@@ -27,13 +28,14 @@ app.use(
 // Always allows requests with no Origin header (server-to-server, curl, mobile).
 function buildAllowedOrigins(): (string | RegExp)[] {
   const raw = process.env.ALLOWED_ORIGINS;
-  const base: (string | RegExp)[] = [/^http:\/\/localhost(:\d+)?$/];
+  // Only allow localhost in non-production environments
+  const base: (string | RegExp)[] =
+    process.env.NODE_ENV !== "production" ? [/^http:\/\/localhost(:\d+)?$/] : [];
   if (!raw) return base;
   const extra = raw
     .split(",")
     .map((s) => s.trim())
-    .filter(Boolean)
-    .map((s) => s as string);
+    .filter(Boolean);
   return [...base, ...extra];
 }
 
@@ -73,10 +75,16 @@ const apiLimiter = rateLimit({
   skip: (req) => req.method === "OPTIONS",
 });
 
-// Request logging
+// Request logging — propagate X-Request-Id for end-to-end tracing
 app.use(
   pinoHttp({
     logger,
+    genReqId: (req, res) => {
+      const existing = req.headers["x-request-id"];
+      const id = (Array.isArray(existing) ? existing[0] : existing) ?? randomUUID();
+      res.setHeader("x-request-id", id);
+      return id;
+    },
     serializers: {
       req(req) {
         return {

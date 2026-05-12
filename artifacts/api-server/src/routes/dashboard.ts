@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { eq, and, gte, lte, inArray, or } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
+import { asyncHandler } from "../lib/async-handler";
 import {
   GetDashboardSummaryQueryParams,
   GetDailyTrsQueryParams,
@@ -195,7 +196,7 @@ async function getMonthlyTrsResult(
   };
 }
 
-router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> => {
+router.get("/dashboard/summary", requireAuth, asyncHandler(async (req, res) => {
   const query = GetDashboardSummaryQueryParams.safeParse(req.query);
   const now = new Date();
   const month = (query.success && query.data.month) ? query.data.month : now.getMonth() + 1;
@@ -256,9 +257,9 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     totalQuantityConforming,
     totalRejected,
   });
-});
+}));
 
-router.get("/dashboard/daily-trs", requireAuth, async (req, res): Promise<void> => {
+router.get("/dashboard/daily-trs", requireAuth, asyncHandler(async (req, res) => {
   const query = GetDailyTrsQueryParams.safeParse(req.query);
   if (!query.success || !query.data.month || !query.data.year) {
     res.status(400).json({ error: "month and year are required" });
@@ -340,9 +341,9 @@ router.get("/dashboard/daily-trs", requireAuth, async (req, res): Promise<void> 
   }
 
   res.json(result);
-});
+}));
 
-router.get("/dashboard/downtime-pareto", requireAuth, async (req, res): Promise<void> => {
+router.get("/dashboard/downtime-pareto", requireAuth, asyncHandler(async (req, res) => {
   const query = GetDowntimeParetoQueryParams.safeParse(req.query);
   if (!query.success || !query.data.month || !query.data.year) {
     res.status(400).json({ error: "month and year are required" });
@@ -437,9 +438,9 @@ router.get("/dashboard/downtime-pareto", requireAuth, async (req, res): Promise<
   });
 
   res.json(result);
-});
+}));
 
-router.get("/dashboard/equipment-comparison", requireAuth, async (req, res): Promise<void> => {
+router.get("/dashboard/equipment-comparison", requireAuth, asyncHandler(async (req, res) => {
   const query = GetEquipmentComparisonQueryParams.safeParse(req.query);
   if (!query.success || !query.data.month || !query.data.year) {
     res.status(400).json({ error: "month and year are required" });
@@ -467,9 +468,9 @@ router.get("/dashboard/equipment-comparison", requireAuth, async (req, res): Pro
     };
   }));
   res.json(result);
-});
+}));
 
-router.get("/dashboard/monthly-kpis", requireAuth, async (req, res): Promise<void> => {
+router.get("/dashboard/monthly-kpis", requireAuth, asyncHandler(async (req, res) => {
   const query = GetMonthlyKpisQueryParams.safeParse(req.query);
   if (!query.success || !query.data.month || !query.data.year) {
     res.status(400).json({ error: "month and year are required" });
@@ -504,9 +505,9 @@ router.get("/dashboard/monthly-kpis", requireAuth, async (req, res): Promise<voi
     totalDowntimeUnplanned: monthly.totalDowntimeUnplanned,
     source: monthly.source,
   });
-});
+}));
 
-router.get("/dashboard/pending-validations", requireAuth, requireRole("supervisor", "admin"), async (req, res): Promise<void> => {
+router.get("/dashboard/pending-validations", requireAuth, requireRole("supervisor", "admin"), asyncHandler(async (req, res) => {
   const entries = await db
     .select({ id: productionEntriesTable.id })
     .from(productionEntriesTable)
@@ -515,7 +516,7 @@ router.get("/dashboard/pending-validations", requireAuth, requireRole("superviso
 
   const results = await Promise.all(entries.map(e => buildEntryWithDetails(e.id)));
   res.json(results.filter(Boolean));
-});
+}));
 
 async function buildEntryWithDetails(entryId: string) {
   const { usersTable, productsTable } = await import("@workspace/db");
@@ -616,7 +617,7 @@ async function buildEntryWithDetails(entryId: string) {
 }
 
 // ─── Annual TRS (12 months) ───────────────────────────────────────────────────
-router.get("/dashboard/annual-trs", requireAuth, async (req, res): Promise<void> => {
+router.get("/dashboard/annual-trs", requireAuth, asyncHandler(async (req, res) => {
   const year = parseInt(String(req.query.year ?? new Date().getFullYear()));
   const equipmentId = req.query.equipmentId as string | undefined;
   const LABELS = ["Janv","Févr","Mars","Avr","Mai","Juin","Juil","Août","Sept","Oct","Nov","Déc"];
@@ -638,10 +639,10 @@ router.get("/dashboard/annual-trs", requireAuth, async (req, res): Promise<void>
     })
   );
   res.json(result);
-});
+}));
 
 // ─── Weekly TRS ───────────────────────────────────────────────────────────────
-router.get("/dashboard/weekly-trs", requireAuth, async (req, res): Promise<void> => {
+router.get("/dashboard/weekly-trs", requireAuth, asyncHandler(async (req, res) => {
   const year = parseInt(String(req.query.year ?? new Date().getFullYear()));
   const equipmentId = req.query.equipmentId as string | undefined;
 
@@ -685,6 +686,6 @@ router.get("/dashboard/weekly-trs", requireAuth, async (req, res): Promise<void>
     };
   });
   res.json(result);
-});
+}));
 
 export default router;

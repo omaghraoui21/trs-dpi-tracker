@@ -2,6 +2,7 @@ import { Router, IRouter } from "express";
 import { db, kpiTargetsTable } from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
+import { asyncHandler } from "../lib/async-handler";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -19,7 +20,7 @@ const CreateTargetSchema = z.object({
   isActive:          z.boolean().default(true),
 });
 
-router.get("/kpi-targets", requireAuth, async (req, res): Promise<void> => {
+router.get("/kpi-targets", requireAuth, asyncHandler(async (req, res) => {
   const targets = await db
     .select()
     .from(kpiTargetsTable)
@@ -27,9 +28,9 @@ router.get("/kpi-targets", requireAuth, async (req, res): Promise<void> => {
     .orderBy(kpiTargetsTable.kpiCode);
 
   res.json(targets);
-});
+}));
 
-router.post("/kpi-targets", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+router.post("/kpi-targets", requireAuth, requireRole("admin"), asyncHandler(async (req, res) => {
   const parsed = CreateTargetSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Données invalides", details: parsed.error.issues });
@@ -48,9 +49,9 @@ router.post("/kpi-targets", requireAuth, requireRole("admin"), async (req, res):
     .returning();
 
   res.status(201).json(created);
-});
+}));
 
-router.patch("/kpi-targets/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+router.patch("/kpi-targets/:id", requireAuth, requireRole("admin"), asyncHandler(async (req, res) => {
   const id = req.params.id as string;
   const parsed = CreateTargetSchema.partial().safeParse(req.body);
   if (!parsed.success) {
@@ -75,9 +76,9 @@ router.patch("/kpi-targets/:id", requireAuth, requireRole("admin"), async (req, 
 
   if (!updated) { res.status(404).json({ error: "Objectif non trouvé" }); return; }
   res.json(updated);
-});
+}));
 
-router.delete("/kpi-targets/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+router.delete("/kpi-targets/:id", requireAuth, requireRole("admin"), asyncHandler(async (req, res) => {
   const id = req.params.id as string;
   const [updated] = await db
     .update(kpiTargetsTable)
@@ -86,6 +87,6 @@ router.delete("/kpi-targets/:id", requireAuth, requireRole("admin"), async (req,
     .returning();
   if (!updated) { res.status(404).json({ error: "Objectif non trouvé" }); return; }
   res.json({ success: true });
-});
+}));
 
 export default router;

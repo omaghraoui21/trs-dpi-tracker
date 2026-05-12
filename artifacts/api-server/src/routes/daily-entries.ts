@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, dailyEntriesTable, equipmentsTable, usersTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
+import { asyncHandler } from "../lib/async-handler";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { z } from "zod/v4";
 
@@ -52,7 +53,7 @@ function computeDailyOee(row: {
  * GET /api/daily-entries
  * Query: equipmentId, year, month, dateFrom, dateTo
  */
-router.get("/daily-entries", requireAuth, async (req, res): Promise<void> => {
+router.get("/daily-entries", requireAuth, asyncHandler(async (req, res) => {
   const { equipmentId, year, month, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
 
   const filters: ReturnType<typeof eq>[] = [];
@@ -108,7 +109,7 @@ router.get("/daily-entries", requireAuth, async (req, res): Promise<void> => {
     .orderBy(dailyEntriesTable.entryDate);
 
   res.json(rows.map((r) => ({ ...r, ...computeDailyOee(r) })));
-});
+}));
 
 /**
  * GET /api/daily-entries/monthly-summary
@@ -116,7 +117,7 @@ router.get("/daily-entries", requireAuth, async (req, res): Promise<void> => {
  * This route MUST be registered before /:id to avoid route shadowing.
  * Query: equipmentId (required), year (required), month (required)
  */
-router.get("/daily-entries/monthly-summary", requireAuth, async (req, res): Promise<void> => {
+router.get("/daily-entries/monthly-summary", requireAuth, asyncHandler(async (req, res) => {
   const { equipmentId, year, month } = req.query as Record<string, string | undefined>;
 
   if (!equipmentId || !year || !month) {
@@ -188,12 +189,12 @@ router.get("/daily-entries/monthly-summary", requireAuth, async (req, res): Prom
     totalTR,
     days,
   });
-});
+}));
 
 /**
  * GET /api/daily-entries/:id
  */
-router.get("/daily-entries/:id", requireAuth, async (req, res): Promise<void> => {
+router.get("/daily-entries/:id", requireAuth, asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const rows = await db
@@ -229,14 +230,14 @@ router.get("/daily-entries/:id", requireAuth, async (req, res): Promise<void> =>
 
   const r = rows[0];
   res.json({ ...r, ...computeDailyOee(r) });
-});
+}));
 
 /**
  * POST /api/daily-entries
  * Crée une nouvelle fiche journalière.
  * Contrainte : 1 seule fiche par équipement par jour.
  */
-router.post("/daily-entries", requireAuth, async (req, res): Promise<void> => {
+router.post("/daily-entries", requireAuth, asyncHandler(async (req, res) => {
   const parsed = CreateDailyEntrySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Données invalides", details: parsed.error.issues });
@@ -280,14 +281,14 @@ router.post("/daily-entries", requireAuth, async (req, res): Promise<void> => {
     .returning();
 
   res.status(201).json({ ...created, ...computeDailyOee(created) });
-});
+}));
 
 /**
  * PATCH /api/daily-entries/:id
  * Mise à jour partielle. Seul le créateur, un superviseur ou un admin peut modifier.
  * Un superviseur peut également valider (status → validated).
  */
-router.patch("/daily-entries/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/daily-entries/:id", requireAuth, asyncHandler(async (req, res) => {
   const { id } = req.params;
   const userId = (req as any).user?.id;
   const userRole = (req as any).user?.role;
@@ -339,13 +340,13 @@ router.patch("/daily-entries/:id", requireAuth, async (req, res): Promise<void> 
     .returning();
 
   res.json({ ...updated, ...computeDailyOee(updated) });
-});
+}));
 
 /**
  * DELETE /api/daily-entries/:id
  * Suppression — superviseur/admin, ou propriétaire si statut draft.
  */
-router.delete("/daily-entries/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/daily-entries/:id", requireAuth, asyncHandler(async (req, res) => {
   const { id } = req.params;
   const userId = (req as any).user?.id;
   const userRole = (req as any).user?.role;
@@ -375,6 +376,6 @@ router.delete("/daily-entries/:id", requireAuth, async (req, res): Promise<void>
 
   await db.delete(dailyEntriesTable).where(eq(dailyEntriesTable.id, String(id)));
   res.status(204).send();
-});
+}));
 
 export default router;

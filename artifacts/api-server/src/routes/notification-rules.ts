@@ -2,6 +2,7 @@ import { Router, IRouter } from "express";
 import { db, notificationRulesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
+import { asyncHandler } from "../lib/async-handler";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -40,7 +41,7 @@ const DEFAULT_RULES: RuleInsert[] = [
   { ruleCode: "TQ_BELOW_95",        ruleName: "Qualité inférieure à 95%",       conditionExpression: "TQ < 0.95",             severity: "warning",  thresholdValue: "0.95", targetRoles: "supervisor",      inAppEnabled: true, emailEnabled: false, isActive: false },
 ];
 
-router.get("/notification-rules", requireAuth, async (req, res): Promise<void> => {
+router.get("/notification-rules", requireAuth, asyncHandler(async (req, res) => {
   const rules = await db
     .select()
     .from(notificationRulesTable)
@@ -56,9 +57,9 @@ router.get("/notification-rules", requireAuth, async (req, res): Promise<void> =
   }
 
   res.json(rules);
-});
+}));
 
-router.post("/notification-rules", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+router.post("/notification-rules", requireAuth, requireRole("admin"), asyncHandler(async (req, res) => {
   const parsed = CreateRuleSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Données invalides", details: parsed.error.issues });
@@ -74,9 +75,9 @@ router.post("/notification-rules", requireAuth, requireRole("admin"), async (req
     .returning();
 
   res.status(201).json(created);
-});
+}));
 
-router.patch("/notification-rules/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+router.patch("/notification-rules/:id", requireAuth, requireRole("admin"), asyncHandler(async (req, res) => {
   const id = req.params.id as string;
   const parsed = CreateRuleSchema.partial().safeParse(req.body);
   if (!parsed.success) {
@@ -103,9 +104,9 @@ router.patch("/notification-rules/:id", requireAuth, requireRole("admin"), async
 
   if (!updated) { res.status(404).json({ error: "Règle non trouvée" }); return; }
   res.json(updated);
-});
+}));
 
-router.delete("/notification-rules/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+router.delete("/notification-rules/:id", requireAuth, requireRole("admin"), asyncHandler(async (req, res) => {
   const id = req.params.id as string;
   const [updated] = await db
     .update(notificationRulesTable)
@@ -114,6 +115,6 @@ router.delete("/notification-rules/:id", requireAuth, requireRole("admin"), asyn
     .returning();
   if (!updated) { res.status(404).json({ error: "Règle non trouvée" }); return; }
   res.json({ success: true });
-});
+}));
 
 export default router;

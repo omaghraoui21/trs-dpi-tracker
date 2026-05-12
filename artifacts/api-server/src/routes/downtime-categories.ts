@@ -2,6 +2,7 @@ import { Router, IRouter } from "express";
 import { db, downtimeCategoriesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
+import { asyncHandler } from "../lib/async-handler";
 import {
   CreateDowntimeCategoryBody,
   UpdateDowntimeCategoryBody,
@@ -26,12 +27,12 @@ function formatCategory(c: typeof downtimeCategoriesTable.$inferSelect) {
   };
 }
 
-router.get("/downtime-categories", requireAuth, async (_req, res): Promise<void> => {
+router.get("/downtime-categories", requireAuth, asyncHandler(async (_req, res) => {
   const rows = await db.select().from(downtimeCategoriesTable).orderBy(downtimeCategoriesTable.code);
   res.json(rows.map(formatCategory));
-});
+}));
 
-router.post("/downtime-categories", requireAuth, requireRole("admin", "supervisor"), async (req, res): Promise<void> => {
+router.post("/downtime-categories", requireAuth, requireRole("admin", "supervisor"), asyncHandler(async (req, res) => {
   const { isQuickShortcut, shortcutEquipments, ...bodyRest } = req.body as { isQuickShortcut?: boolean; shortcutEquipments?: string | null; [k: string]: unknown };
   const parsed = CreateDowntimeCategoryBody.safeParse(bodyRest);
   if (!parsed.success) {
@@ -43,9 +44,9 @@ router.post("/downtime-categories", requireAuth, requireRole("admin", "superviso
   if (shortcutEquipments !== undefined) insertData.shortcutEquipments = shortcutEquipments ?? null;
   const [row] = await db.insert(downtimeCategoriesTable).values(insertData).returning();
   res.status(201).json(formatCategory(row));
-});
+}));
 
-router.patch("/downtime-categories/:id", requireAuth, requireRole("admin", "supervisor"), async (req, res): Promise<void> => {
+router.patch("/downtime-categories/:id", requireAuth, requireRole("admin", "supervisor"), asyncHandler(async (req, res) => {
   const params = UpdateDowntimeCategoryParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -66,9 +67,9 @@ router.patch("/downtime-categories/:id", requireAuth, requireRole("admin", "supe
     return;
   }
   res.json(formatCategory(row));
-});
+}));
 
-router.delete("/downtime-categories/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+router.delete("/downtime-categories/:id", requireAuth, requireRole("admin"), asyncHandler(async (req, res) => {
   const id = req.params["id"] as string;
   if (!id) { res.status(400).json({ error: "ID requis" }); return; }
   const [row] = await db
@@ -78,6 +79,6 @@ router.delete("/downtime-categories/:id", requireAuth, requireRole("admin"), asy
     .returning();
   if (!row) { res.status(404).json({ error: "Category not found" }); return; }
   res.sendStatus(204);
-});
+}));
 
 export default router;

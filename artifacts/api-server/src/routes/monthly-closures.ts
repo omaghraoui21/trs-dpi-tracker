@@ -2,6 +2,7 @@ import { Router, IRouter } from "express";
 import { db, monthlyClosuresTable, usersTable, equipmentsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
+import { asyncHandler } from "../lib/async-handler";
 import {
   ListMonthlyClosuresQueryParams,
   CreateMonthlyClosureBody,
@@ -9,7 +10,7 @@ import {
 
 const router: IRouter = Router();
 
-router.get("/monthly-closures", requireAuth, async (req, res): Promise<void> => {
+router.get("/monthly-closures", requireAuth, asyncHandler(async (req, res) => {
   const query = ListMonthlyClosuresQueryParams.safeParse(req.query);
   const rows = await db
     .select({
@@ -37,9 +38,9 @@ router.get("/monthly-closures", requireAuth, async (req, res): Promise<void> => 
     lockedAt: r.lockedAt.toISOString(),
     comment: r.comment ?? null,
   })));
-});
+}));
 
-router.post("/monthly-closures", requireAuth, requireRole("supervisor", "admin"), async (req, res): Promise<void> => {
+router.post("/monthly-closures", requireAuth, requireRole("supervisor", "admin"), asyncHandler(async (req, res) => {
   const parsed = CreateMonthlyClosureBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -79,6 +80,6 @@ router.post("/monthly-closures", requireAuth, requireRole("supervisor", "admin")
     lockedAt: full.lockedAt.toISOString(),
     comment: full.comment ?? null,
   });
-});
+}));
 
 export default router;

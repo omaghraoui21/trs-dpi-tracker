@@ -1,11 +1,12 @@
 import { Router, type IRouter } from "express";
 import { db, notificationsTable } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/auth";
+import { asyncHandler } from "../lib/async-handler";
 import { eq, desc, and, or } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-router.get("/notifications", requireAuth, async (req, res): Promise<void> => {
+router.get("/notifications", requireAuth, asyncHandler(async (req, res) => {
   const status = String(req.query.status ?? "");
   const severity = String(req.query.severity ?? "");
   const lim = req.query.limit ? parseInt(String(req.query.limit)) : 200;
@@ -46,9 +47,9 @@ router.get("/notifications", requireAuth, async (req, res): Promise<void> => {
     closedAt: n.closedAt instanceof Date ? n.closedAt.toISOString() : (n.closedAt ?? null),
     comment: n.closureComment ?? null,
   })));
-});
+}));
 
-router.post("/notifications", requireAuth, requireRole("supervisor", "admin"), async (req, res): Promise<void> => {
+router.post("/notifications", requireAuth, requireRole("supervisor", "admin"), asyncHandler(async (req, res) => {
   const { type, severity, lot, message } = req.body as {
     type: string; severity?: string; lot?: string; message: string;
   };
@@ -75,9 +76,9 @@ router.post("/notifications", requireAuth, requireRole("supervisor", "admin"), a
     closedAt: null,
     comment: null,
   });
-});
+}));
 
-router.patch("/notifications/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/notifications/:id", requireAuth, asyncHandler(async (req, res) => {
   const id = req.params["id"] as string;
   const { action, comment } = req.body as { action: "acknowledge" | "close"; comment?: string };
   const userId = req.user!.id;
@@ -117,12 +118,12 @@ router.patch("/notifications/:id", requireAuth, async (req, res): Promise<void> 
     closedAt: updated.closedAt instanceof Date ? updated.closedAt.toISOString() : (updated.closedAt ?? null),
     comment: updated.closureComment ?? null,
   });
-});
+}));
 
-router.delete("/notifications/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+router.delete("/notifications/:id", requireAuth, requireRole("admin"), asyncHandler(async (req, res) => {
   const id = req.params["id"] as string;
   await db.delete(notificationsTable).where(eq(notificationsTable.id, id));
   res.status(204).send();
-});
+}));
 
 export default router;

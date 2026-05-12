@@ -2,6 +2,7 @@ import { Router, IRouter } from "express";
 import { db, planningActivityMappingsTable, equipmentsTable, roomsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
+import { asyncHandler } from "../lib/async-handler";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -18,7 +19,7 @@ const CreateMappingSchema = z.object({
   isActive:            z.boolean().default(true),
 });
 
-router.get("/planning-mappings", requireAuth, async (req, res): Promise<void> => {
+router.get("/planning-mappings", requireAuth, asyncHandler(async (req, res) => {
   const mappings = await db
     .select({
       id: planningActivityMappingsTable.id,
@@ -40,9 +41,9 @@ router.get("/planning-mappings", requireAuth, async (req, res): Promise<void> =>
     .orderBy(planningActivityMappingsTable.activityLabel);
 
   res.json(mappings);
-});
+}));
 
-router.post("/planning-mappings", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+router.post("/planning-mappings", requireAuth, requireRole("admin"), asyncHandler(async (req, res) => {
   const parsed = CreateMappingSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Données invalides", details: parsed.error.issues });
@@ -55,9 +56,9 @@ router.post("/planning-mappings", requireAuth, requireRole("admin"), async (req,
     .returning();
 
   res.status(201).json(created);
-});
+}));
 
-router.patch("/planning-mappings/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+router.patch("/planning-mappings/:id", requireAuth, requireRole("admin"), asyncHandler(async (req, res) => {
   const id = req.params.id as string;
   const parsed = CreateMappingSchema.partial().safeParse(req.body);
   if (!parsed.success) {
@@ -84,9 +85,9 @@ router.patch("/planning-mappings/:id", requireAuth, requireRole("admin"), async 
 
   if (!updated) { res.status(404).json({ error: "Mapping non trouvé" }); return; }
   res.json(updated);
-});
+}));
 
-router.delete("/planning-mappings/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+router.delete("/planning-mappings/:id", requireAuth, requireRole("admin"), asyncHandler(async (req, res) => {
   const id = req.params.id as string;
   const [updated] = await db
     .update(planningActivityMappingsTable)
@@ -95,6 +96,6 @@ router.delete("/planning-mappings/:id", requireAuth, requireRole("admin"), async
     .returning();
   if (!updated) { res.status(404).json({ error: "Mapping non trouvé" }); return; }
   res.json({ success: true });
-});
+}));
 
 export default router;

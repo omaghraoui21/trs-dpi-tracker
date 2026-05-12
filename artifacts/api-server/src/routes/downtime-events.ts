@@ -2,6 +2,7 @@ import { Router, IRouter } from "express";
 import { db, downtimeEventsTable, downtimeCategoriesTable, productionEntriesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
+import { asyncHandler } from "../lib/async-handler";
 import type { User } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -75,7 +76,7 @@ async function canWriteEntry(entryId: string, user: User): Promise<boolean> {
   return entry?.operatorId === user.id;
 }
 
-router.get("/downtime-events", requireAuth, async (req, res): Promise<void> => {
+router.get("/downtime-events", requireAuth, asyncHandler(async (req, res) => {
   const entryId = String(req.query.entryId ?? "");
   if (!entryId) {
     res.status(400).json({ error: "entryId is required" });
@@ -87,10 +88,10 @@ router.get("/downtime-events", requireAuth, async (req, res): Promise<void> => {
     .leftJoin(downtimeCategoriesTable, eq(downtimeEventsTable.categoryId, downtimeCategoriesTable.id))
     .where(and(eq(downtimeEventsTable.entryId, entryId), eq(downtimeEventsTable.isDeleted, false)));
   res.json(rows.map(formatEvent));
-});
+}));
 
 // ── POST /downtime-events — crée un arrêt fermé (durée connue) ───────────
-router.post("/downtime-events", requireAuth, async (req, res): Promise<void> => {
+router.post("/downtime-events", requireAuth, asyncHandler(async (req, res) => {
   const { entryId, categoryId, startTime, endTime, comment } = req.body as {
     entryId: string; categoryId: string; startTime: string; endTime: string; comment?: string;
   };
@@ -124,10 +125,10 @@ router.post("/downtime-events", requireAuth, async (req, res): Promise<void> => 
     .leftJoin(downtimeCategoriesTable, eq(downtimeEventsTable.categoryId, downtimeCategoriesTable.id))
     .where(eq(downtimeEventsTable.id, row.id));
   res.status(201).json(formatEvent(full));
-});
+}));
 
 // ── POST /downtime-events/start — démarre un arrêt live (status=open) ────
-router.post("/downtime-events/start", requireAuth, async (req, res): Promise<void> => {
+router.post("/downtime-events/start", requireAuth, asyncHandler(async (req, res) => {
   const { entryId, categoryId, startTime, comment } = req.body as {
     entryId: string; categoryId: string; startTime?: string; comment?: string;
   };
@@ -157,10 +158,10 @@ router.post("/downtime-events/start", requireAuth, async (req, res): Promise<voi
     .leftJoin(downtimeCategoriesTable, eq(downtimeEventsTable.categoryId, downtimeCategoriesTable.id))
     .where(eq(downtimeEventsTable.id, row.id));
   res.status(201).json(formatEvent(full));
-});
+}));
 
 // ── PATCH /downtime-events/:id/stop — ferme un arrêt live ────────────────
-router.patch("/downtime-events/:id/stop", requireAuth, async (req, res): Promise<void> => {
+router.patch("/downtime-events/:id/stop", requireAuth, asyncHandler(async (req, res) => {
   const id = req.params["id"] as string;
   const { endTime } = req.body as { endTime?: string };
   const effectiveEnd = endTime ?? nowHHMM();
@@ -187,9 +188,9 @@ router.patch("/downtime-events/:id/stop", requireAuth, async (req, res): Promise
     .leftJoin(downtimeCategoriesTable, eq(downtimeEventsTable.categoryId, downtimeCategoriesTable.id))
     .where(eq(downtimeEventsTable.id, id));
   res.json(formatEvent(full));
-});
+}));
 
-router.patch("/downtime-events/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/downtime-events/:id", requireAuth, asyncHandler(async (req, res) => {
   const id = req.params["id"] as string;
   const { categoryId, startTime, endTime, comment } = req.body as {
     categoryId?: string; startTime?: string; endTime?: string; comment?: string;
@@ -219,9 +220,9 @@ router.patch("/downtime-events/:id", requireAuth, async (req, res): Promise<void
     .leftJoin(downtimeCategoriesTable, eq(downtimeEventsTable.categoryId, downtimeCategoriesTable.id))
     .where(eq(downtimeEventsTable.id, id));
   res.json(formatEvent(full));
-});
+}));
 
-router.delete("/downtime-events/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/downtime-events/:id", requireAuth, asyncHandler(async (req, res) => {
   const id = req.params["id"] as string;
   const [existing] = await db.select({ entryId: downtimeEventsTable.entryId }).from(downtimeEventsTable).where(eq(downtimeEventsTable.id, id));
   if (!existing) {
@@ -234,6 +235,6 @@ router.delete("/downtime-events/:id", requireAuth, async (req, res): Promise<voi
   }
   await db.update(downtimeEventsTable).set({ isDeleted: true }).where(eq(downtimeEventsTable.id, id));
   res.sendStatus(204);
-});
+}));
 
 export default router;

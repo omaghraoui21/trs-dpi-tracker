@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, annualCalendarEventsTable, equipmentsTable } from "@workspace/db";
 import { requireAuth, requireRole } from "../middlewares/auth";
+import { asyncHandler } from "../lib/async-handler";
 import { eq, and, gte, lte, or } from "drizzle-orm";
 import { z } from "zod/v4";
 
@@ -28,7 +29,7 @@ const UpdateEventSchema = CreateEventSchema.partial();
  * GET /api/calendar-events
  * Query: year, dateFrom, dateTo, eventType, equipmentId, scope
  */
-router.get("/calendar-events", requireAuth, async (req, res): Promise<void> => {
+router.get("/calendar-events", requireAuth, asyncHandler(async (req, res) => {
   const { year, dateFrom, dateTo, eventType, equipmentId } = req.query as Record<string, string>;
 
   const filters: ReturnType<typeof eq>[] = [];
@@ -70,14 +71,14 @@ router.get("/calendar-events", requireAuth, async (req, res): Promise<void> => {
     .orderBy(annualCalendarEventsTable.dateFrom);
 
   res.json(rows);
-});
+}));
 
 /**
  * GET /api/calendar-events/impact
  * Returns TO/TR deduction summary for a given month/year (and optional equipmentId)
  * Used by dashboard to adjust tO and tR calculations
  */
-router.get("/calendar-events/impact", requireAuth, async (req, res): Promise<void> => {
+router.get("/calendar-events/impact", requireAuth, asyncHandler(async (req, res) => {
   const { year, month, equipmentId } = req.query as Record<string, string>;
   if (!year || !month) { res.status(400).json({ error: "year and month are required" }); return; }
 
@@ -157,12 +158,12 @@ router.get("/calendar-events/impact", requireAuth, async (req, res): Promise<voi
     eventsByDate,
     eventCount: relevant.length,
   });
-});
+}));
 
 /**
  * POST /api/calendar-events
  */
-router.post("/calendar-events", requireAuth, requireRole("supervisor", "admin"), async (req, res): Promise<void> => {
+router.post("/calendar-events", requireAuth, requireRole("supervisor", "admin"), asyncHandler(async (req, res) => {
   const parsed = CreateEventSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Données invalides", details: parsed.error.issues }); return; }
 
@@ -184,12 +185,12 @@ router.post("/calendar-events", requireAuth, requireRole("supervisor", "admin"),
   }).returning();
 
   res.status(201).json(row);
-});
+}));
 
 /**
  * PATCH /api/calendar-events/:id
  */
-router.patch("/calendar-events/:id", requireAuth, requireRole("supervisor", "admin"), async (req, res): Promise<void> => {
+router.patch("/calendar-events/:id", requireAuth, requireRole("supervisor", "admin"), asyncHandler(async (req, res) => {
   const { id } = req.params;
   const parsed = UpdateEventSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Données invalides", details: parsed.error.issues }); return; }
@@ -208,18 +209,18 @@ router.patch("/calendar-events/:id", requireAuth, requireRole("supervisor", "adm
     .returning();
 
   res.json(updated);
-});
+}));
 
 /**
  * DELETE /api/calendar-events/:id
  */
-router.delete("/calendar-events/:id", requireAuth, requireRole("supervisor", "admin"), async (req, res): Promise<void> => {
+router.delete("/calendar-events/:id", requireAuth, requireRole("supervisor", "admin"), asyncHandler(async (req, res) => {
   const { id } = req.params;
   const [existing] = await db.select().from(annualCalendarEventsTable).where(eq(annualCalendarEventsTable.id, String(id)));
   if (!existing) { res.status(404).json({ error: "Événement non trouvé" }); return; }
 
   await db.delete(annualCalendarEventsTable).where(eq(annualCalendarEventsTable.id, String(id)));
   res.status(204).send();
-});
+}));
 
 export default router;

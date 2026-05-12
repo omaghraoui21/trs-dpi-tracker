@@ -2,6 +2,7 @@ import { Router, IRouter } from "express";
 import { db, equipmentsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
+import { asyncHandler } from "../lib/async-handler";
 import {
   CreateEquipmentBody,
   UpdateEquipmentBody,
@@ -22,12 +23,12 @@ function formatEquipment(e: typeof equipmentsTable.$inferSelect) {
   };
 }
 
-router.get("/equipments", requireAuth, async (_req, res): Promise<void> => {
+router.get("/equipments", requireAuth, asyncHandler(async (_req, res) => {
   const rows = await db.select().from(equipmentsTable).orderBy(equipmentsTable.name);
   res.json(rows.map(formatEquipment));
-});
+}));
 
-router.post("/equipments", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+router.post("/equipments", requireAuth, requireRole("admin"), asyncHandler(async (req, res) => {
   const parsed = CreateEquipmentBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -38,9 +39,9 @@ router.post("/equipments", requireAuth, requireRole("admin"), async (req, res): 
     trsObjective: parsed.data.trsObjective.toString(),
   }).returning();
   res.status(201).json(formatEquipment(row));
-});
+}));
 
-router.patch("/equipments/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+router.patch("/equipments/:id", requireAuth, requireRole("admin"), asyncHandler(async (req, res) => {
   const params = UpdateEquipmentParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -61,9 +62,9 @@ router.patch("/equipments/:id", requireAuth, requireRole("admin"), async (req, r
     return;
   }
   res.json(formatEquipment(row));
-});
+}));
 
-router.delete("/equipments/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+router.delete("/equipments/:id", requireAuth, requireRole("admin"), asyncHandler(async (req, res) => {
   const id = req.params["id"] as string;
   if (!id) { res.status(400).json({ error: "ID requis" }); return; }
   const [row] = await db
@@ -73,6 +74,6 @@ router.delete("/equipments/:id", requireAuth, requireRole("admin"), async (req, 
     .returning();
   if (!row) { res.status(404).json({ error: "Equipment not found" }); return; }
   res.sendStatus(204);
-});
+}));
 
 export default router;

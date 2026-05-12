@@ -63,13 +63,14 @@ async function shutdown(signal: string) {
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT",  () => shutdown("SIGINT"));
 
-// Unhandled rejections / exceptions — log and exit (let the process manager restart)
+// Unhandled rejections / exceptions — log and exit(1) so Railway detects the crash
+// and increments restart counters. exit(0) would look like a clean shutdown.
 process.on("unhandledRejection", (reason) => {
   logger.error({ reason }, "Unhandled promise rejection");
-  shutdown("unhandledRejection");
+  process.exit(1);
 });
 
 process.on("uncaughtException", (err) => {
   logger.error({ err }, "Uncaught exception");
-  shutdown("uncaughtException");
+  process.exit(1);
 });
