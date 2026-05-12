@@ -10,15 +10,30 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "pnpm run typecheck",
+    "lint": "eslint . && pnpm run typecheck",
+    "lint:fix": "eslint . --fix",
+    "prepare": "husky",
     "validate:production": "pnpm run typecheck && pnpm run test && pnpm --filter @workspace/api-server run build && PORT=3001 BASE_PATH=/ pnpm --filter @workspace/trs-app run build && echo '\\n✅ All checks passed — Production build validated'"
   },
   "private": true,
   "devDependencies": {
+    "@eslint/js": "^9.28.0",
+    "@typescript-eslint/eslint-plugin": "^8.34.0",
+    "@typescript-eslint/parser": "^8.34.0",
     "@vitest/coverage-v8": "^4.1.5",
+    "eslint": "^9.28.0",
+    "eslint-plugin-react": "^7.37.4",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.2.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2",
     "prettier": "^3.8.1",
     "typescript": "~5.9.2",
     "vitest": "^4.1.5"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": ["eslint --fix", "prettier --write"],
+    "*.{json,yml,yaml,md}": ["prettier --write"]
   },
   "dependencies": {
     "xlsx": "^0.18.5"

@@ -22,7 +22,7 @@ if (!process.env.DATABASE_URL) {
 //   postgresql://postgres.[PROJECT-ID]:[PASSWORD]@aws-0-eu-central-1.pooler.supabase.com:5432/postgres
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 10,                  // max concurrent connections per Railway instance
+  max: 25,                  // max concurrent connections per Railway instance (Supabase free ≈ 60 total)
   idleTimeoutMillis: 30_000, // release idle connections after 30 s
   connectionTimeoutMillis: 10_000, // fail fast if DB is unreachable
   // Supabase pooler uses a self-signed cert that fails pg v8's verify-full check.
