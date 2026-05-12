@@ -23,6 +23,14 @@ export default [
   // ── Base JS rules for all files ────────────────────────────────────────────
   js.configs.recommended,
 
+  // ── Node.js config files ──────────────────────────────────────────────────
+  {
+    files: ["*.mjs", "**/*.mjs"],
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+  },
+
   // ── Backend: TypeScript (Node.js) ──────────────────────────────────────────
   {
     files: ["artifacts/api-server/src/**/*.ts", "lib/**/*.ts", "scripts/**/*.ts"],
@@ -39,6 +47,8 @@ export default [
     },
     rules: {
       // TypeScript safety
+      "no-undef": "off",
+      "no-unused-vars": "off",
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
       // Async safety — catch unhandled promises
@@ -76,6 +86,8 @@ export default [
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
       // TypeScript
+      "no-undef": "off",
+      "no-unused-vars": "off",
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
       // General

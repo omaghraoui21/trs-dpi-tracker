@@ -10,7 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "eslint . && pnpm run typecheck",
+    "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "prepare": "husky",
     "validate:production": "pnpm run typecheck && pnpm run test && pnpm --filter @workspace/api-server run build && PORT=3001 BASE_PATH=/ pnpm --filter @workspace/trs-app run build && echo '\\n✅ All checks passed — Production build validated'"
@@ -32,8 +32,13 @@
     "vitest": "^4.1.5"
   },
   "lint-staged": {
-    "*.{ts,tsx}": ["eslint --fix", "prettier --write"],
-    "*.{json,yml,yaml,md}": ["prettier --write"]
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,yml,yaml,md}": [
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "xlsx": "^0.18.5"

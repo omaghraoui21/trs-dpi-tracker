@@ -47,41 +47,61 @@ router.post("/products", requireAuth, requireRole("admin"), async (req, res): Pr
   }
 });
 
-router.patch("/products/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
-  const params = UpdateProductParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const parsed = UpdateProductBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-  const [row] = await db.update(productsTable).set(parsed.data).where(eq(productsTable.id, params.data.id)).returning();
-  if (!row) {
-    res.status(404).json({ error: "Product not found" });
-    return;
-  }
-  res.json(formatProduct(row));
-});
+router.patch(
+  "/products/:id",
+  requireAuth,
+  requireRole("admin"),
+  async (req, res): Promise<void> => {
+    const params = UpdateProductParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const parsed = UpdateProductBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const [row] = await db
+      .update(productsTable)
+      .set(parsed.data)
+      .where(eq(productsTable.id, params.data.id))
+      .returning();
+    if (!row) {
+      res.status(404).json({ error: "Product not found" });
+      return;
+    }
+    res.json(formatProduct(row));
+  },
+);
 
-router.delete("/products/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
-  const id = req.params["id"] as string;
-  if (!id) { res.status(400).json({ error: "ID requis" }); return; }
-  const [row] = await db
-    .update(productsTable)
-    .set({ isActive: false })
-    .where(eq(productsTable.id, id))
-    .returning();
-  if (!row) { res.status(404).json({ error: "Product not found" }); return; }
-  res.sendStatus(204);
-});
+router.delete(
+  "/products/:id",
+  requireAuth,
+  requireRole("admin"),
+  async (req, res): Promise<void> => {
+    const id = req.params["id"] as string;
+    if (!id) {
+      res.status(400).json({ error: "ID requis" });
+      return;
+    }
+    const [row] = await db
+      .update(productsTable)
+      .set({ isActive: false })
+      .where(eq(productsTable.id, id))
+      .returning();
+    if (!row) {
+      res.status(404).json({ error: "Product not found" });
+      return;
+    }
+    res.sendStatus(204);
+  },
+);
 
 // Cadences
 router.get("/cadences", requireAuth, async (req, res): Promise<void> => {
   const query = ListCadencesQueryParams.safeParse(req.query);
-  let dbQuery = db
+  const dbQuery = db
     .select({
       id: cadencesTable.id,
       productId: cadencesTable.productId,
@@ -104,15 +124,15 @@ router.get("/cadences", requireAuth, async (req, res): Promise<void> => {
     conditions.push(eq(cadencesTable.equipmentId, query.data.equipmentId));
   }
 
-  const rows = conditions.length > 0
-    ? await dbQuery.where(and(...conditions))
-    : await dbQuery;
+  const rows = conditions.length > 0 ? await dbQuery.where(and(...conditions)) : await dbQuery;
 
-  res.json(rows.map(r => ({
-    ...r,
-    theoreticalCadence: parseFloat(r.theoreticalCadence as unknown as string),
-    validatedCadence: parseFloat(r.validatedCadence as unknown as string),
-  })));
+  res.json(
+    rows.map((r) => ({
+      ...r,
+      theoreticalCadence: parseFloat(r.theoreticalCadence as unknown as string),
+      validatedCadence: parseFloat(r.validatedCadence as unknown as string),
+    })),
+  );
 });
 
 router.post("/cadences", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
@@ -128,8 +148,8 @@ router.post("/cadences", requireAuth, requireRole("admin"), async (req, res): Pr
     .where(
       and(
         eq(cadencesTable.productId, parsed.data.productId),
-        eq(cadencesTable.equipmentId, parsed.data.equipmentId)
-      )
+        eq(cadencesTable.equipmentId, parsed.data.equipmentId),
+      ),
     );
 
   let row;
@@ -144,13 +164,16 @@ router.post("/cadences", requireAuth, requireRole("admin"), async (req, res): Pr
       .where(eq(cadencesTable.id, existing[0].id))
       .returning();
   } else {
-    [row] = await db.insert(cadencesTable).values({
-      productId: parsed.data.productId,
-      equipmentId: parsed.data.equipmentId,
-      theoreticalCadence: parsed.data.theoreticalCadence.toString(),
-      validatedCadence: parsed.data.validatedCadence.toString(),
-      unit: parsed.data.unit,
-    }).returning();
+    [row] = await db
+      .insert(cadencesTable)
+      .values({
+        productId: parsed.data.productId,
+        equipmentId: parsed.data.equipmentId,
+        theoreticalCadence: parsed.data.theoreticalCadence.toString(),
+        validatedCadence: parsed.data.validatedCadence.toString(),
+        unit: parsed.data.unit,
+      })
+      .returning();
   }
 
   // fetch with names
