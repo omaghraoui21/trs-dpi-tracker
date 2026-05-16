@@ -176,7 +176,11 @@ export const UpdateEquipmentBody = zod.object({
   description: zod.string().optional(),
   trsObjective: zod.number().optional(),
   equipmentType: zod.string().optional(),
-  roomId: zod.string().uuid().optional(),
+  roomId: zod
+    .string()
+    .uuid()
+    .nullish()
+    .describe("UUID of the linked room. Send `null` to clear an existing link."),
   isActive: zod.boolean().optional(),
 });
 

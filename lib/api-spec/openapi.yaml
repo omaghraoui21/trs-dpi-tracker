@@ -1450,8 +1450,9 @@ components:
         equipmentType:
           type: string
         roomId:
-          type: string
+          type: ["string", "null"]
           format: uuid
+          description: UUID of the linked room. Send `null` to clear an existing link.
         isActive:
           type: boolean
 

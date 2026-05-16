@@ -627,6 +627,37 @@ describe("equipments routes — Phase 2 lifecycle additions", () => {
       expect(writeAuditSpy).not.toHaveBeenCalled();
     });
   });
+
+  describe("PATCH /api/equipments/:id roomId clearing (v2 review #1)", () => {
+    it("accepts roomId=null to clear the FK and returns roomId=null + roomLabel=null", async () => {
+      const ROOM_ID = "00000000-0000-0000-0000-000000000010";
+      // SELECT existing — equipment currently linked to a room.
+      dbMock.pushResult([eqRow({ roomId: ROOM_ID })]);
+      // UPDATE returning — FK cleared, both roomId and (consequently) the
+      // joined roomLabel become null on the next response.
+      dbMock.pushResult([eqRow({ roomId: null })]);
+
+      const res = await request(app).patch(`/api/equipments/${EQ_ID}`).send({ roomId: null });
+
+      expect(res.status).toBe(200);
+      expect(res.body.roomId).toBeNull();
+      expect(res.body.roomLabel).toBeNull();
+      // Code wasn't part of the body, so the immutability branch must not
+      // run.
+      expect(countDependenciesSpy).not.toHaveBeenCalled();
+      expect(dbMock.db.update).toHaveBeenCalledTimes(1);
+      // formatEquipmentRowAsync short-circuits on roomId=null, so no extra
+      // SELECT against roomsTable is issued for the response body.
+      expect(dbMock.db.select).toHaveBeenCalledTimes(1);
+      expect(writeAuditSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tableName: "equipments",
+          action: "update",
+          recordId: EQ_ID,
+        }),
+      );
+    });
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────

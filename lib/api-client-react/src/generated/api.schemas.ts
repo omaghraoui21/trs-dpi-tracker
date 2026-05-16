@@ -110,7 +110,11 @@ export interface UpdateEquipmentBody {
   description?: string;
   trsObjective?: number;
   equipmentType?: string;
-  roomId?: string;
+  /**
+   * UUID of the linked room. Send `null` to clear an existing link.
+   * @nullable
+   */
+  roomId?: string | null;
   isActive?: boolean;
 }
 
