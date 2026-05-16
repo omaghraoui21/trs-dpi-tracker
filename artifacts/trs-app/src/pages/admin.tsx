@@ -601,7 +601,12 @@ export function EquipmentsTab() {
       description: form.description || undefined,
       trsObjective: Number(form.trsObjective),
       equipmentType: form.equipmentType || undefined,
-      roomId: form.roomId || undefined,
+      // Empty string means "the user cleared the room input". On UPDATE
+      // we send null so the server's PATCH UPDATEs the FK to NULL (v2 review
+      // #1; previously `|| undefined` stripped the field and left the link
+      // in place). On CREATE we keep `undefined` because CreateEquipmentBody
+      // does not accept null — omitting the key is the canonical "no room".
+      roomId: editing ? (form.roomId === "" ? null : form.roomId) : form.roomId || undefined,
     };
     try {
       if (editing) await updateEquipment.mutateAsync({ id: editing, data: payload });
@@ -698,7 +703,10 @@ export function EquipmentsTab() {
                       <>
                         <button
                           className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted"
-                          onClick={() => openEdit(e)}
+                          onClick={() => {
+                            setActionError(null);
+                            openEdit(e);
+                          }}
                         >
                           <Edit className="h-4 w-4" />
                         </button>
