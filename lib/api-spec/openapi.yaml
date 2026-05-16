@@ -1403,6 +1403,14 @@ components:
         trsObjective:
           type: number
           description: Target TRS percentage (0-100)
+        equipmentType:
+          type: ["string", "null"]
+        roomId:
+          type: ["string", "null"]
+          format: uuid
+        roomLabel:
+          type: ["string", "null"]
+          description: Derived label `code - name` of the linked room, populated only on list responses.
         isActive:
           type: boolean
         createdAt:
@@ -1421,6 +1429,11 @@ components:
           type: string
         trsObjective:
           type: number
+        equipmentType:
+          type: string
+        roomId:
+          type: string
+          format: uuid
       required: [name, code, trsObjective]
 
     UpdateEquipmentBody:
@@ -1434,6 +1447,11 @@ components:
           type: string
         trsObjective:
           type: number
+        equipmentType:
+          type: string
+        roomId:
+          type: string
+          format: uuid
         isActive:
           type: boolean
 

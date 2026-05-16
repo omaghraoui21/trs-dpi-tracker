@@ -1,5 +1,5 @@
 import { Router, IRouter } from "express";
-import { db, equipmentsTable } from "@workspace/db";
+import { db, equipmentsTable, roomsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
 import { asyncHandler } from "../lib/async-handler";
@@ -17,13 +17,20 @@ import {
 
 const router: IRouter = Router();
 
-function formatEquipment(e: typeof equipmentsTable.$inferSelect) {
+type EquipmentRow = typeof equipmentsTable.$inferSelect;
+type RoomLabelInput = { code: string | null; name: string | null } | null;
+
+function formatEquipmentRow(e: EquipmentRow, room: RoomLabelInput) {
+  const roomLabel = room && room.code && room.name ? `${room.code} - ${room.name}` : null;
   return {
     id: e.id,
     name: e.name,
     code: e.code,
     description: e.description ?? null,
     trsObjective: parseFloat(e.trsObjective as unknown as string),
+    equipmentType: e.equipmentType ?? null,
+    roomId: e.roomId ?? null,
+    roomLabel,
     isActive: e.isActive,
     createdAt: e.createdAt.toISOString(),
   };
@@ -36,14 +43,37 @@ router.get(
   asyncHandler(async (req, res) => {
     const q = ListEquipmentsQueryParams.safeParse(req.query);
     const includeInactive = q.success ? q.data.includeInactive === true : false;
+
+    const baseQuery = db
+      .select({
+        id: equipmentsTable.id,
+        siteId: equipmentsTable.siteId,
+        roomId: equipmentsTable.roomId,
+        code: equipmentsTable.code,
+        name: equipmentsTable.name,
+        equipmentType: equipmentsTable.equipmentType,
+        description: equipmentsTable.description,
+        trsObjective: equipmentsTable.trsObjective,
+        isActive: equipmentsTable.isActive,
+        createdAt: equipmentsTable.createdAt,
+        updatedAt: equipmentsTable.updatedAt,
+        roomCode: roomsTable.code,
+        roomName: roomsTable.name,
+      })
+      .from(equipmentsTable)
+      .leftJoin(roomsTable, eq(equipmentsTable.roomId, roomsTable.id));
+
     const rows = includeInactive
-      ? await db.select().from(equipmentsTable).orderBy(equipmentsTable.name)
-      : await db
-          .select()
-          .from(equipmentsTable)
-          .where(eq(equipmentsTable.isActive, true))
-          .orderBy(equipmentsTable.name);
-    res.json(rows.map(formatEquipment));
+      ? await baseQuery.orderBy(equipmentsTable.name)
+      : await baseQuery.where(eq(equipmentsTable.isActive, true)).orderBy(equipmentsTable.name);
+
+    res.json(
+      rows.map((row: { roomCode: string | null; roomName: string | null } & EquipmentRow) => {
+        const { roomCode, roomName, ...equipment } = row;
+        const room = roomCode || roomName ? { code: roomCode, name: roomName } : null;
+        return formatEquipmentRow(equipment as EquipmentRow, room);
+      }),
+    );
   }),
 );
 
@@ -72,7 +102,7 @@ router.post(
         action: "create",
         newValues: row as Record<string, unknown>,
       });
-      res.status(201).json(formatEquipment(row));
+      res.status(201).json(formatEquipmentRow(row, null));
     } catch (err) {
       const mapped = mapDbError(err);
       if (mapped) {
@@ -107,6 +137,16 @@ router.patch(
       res.status(404).json({ error: "Equipment not found" });
       return;
     }
+    if (parsed.data.code !== undefined && parsed.data.code !== existing.code) {
+      const deps = await countDependencies("equipments", params.data.id);
+      if (deps.historical > 0) {
+        res.status(409).json({
+          error:
+            "Le code est immuable: cet équipement est référencé par des données historiques (production, arrêts, KPI ou cadences).",
+        });
+        return;
+      }
+    }
     const updateData: Record<string, unknown> = { ...parsed.data };
     if (parsed.data.trsObjective !== undefined) {
       updateData.trsObjective = parsed.data.trsObjective.toString();
@@ -129,7 +169,7 @@ router.patch(
         oldValues: existing as Record<string, unknown>,
         newValues: row as Record<string, unknown>,
       });
-      res.json(formatEquipment(row));
+      res.json(formatEquipmentRow(row, null));
     } catch (err) {
       const mapped = mapDbError(err);
       if (mapped) {
@@ -158,7 +198,7 @@ router.delete(
     }
 
     if (existing.isActive === false) {
-      res.status(200).json(formatEquipment(existing));
+      res.status(200).json(formatEquipmentRow(existing, null));
       return;
     }
 
@@ -209,7 +249,7 @@ router.delete(
       oldValues: existing as Record<string, unknown>,
       newValues: row as Record<string, unknown>,
     });
-    res.status(200).json(formatEquipment(row));
+    res.status(200).json(formatEquipmentRow(row, null));
   }),
 );
 
@@ -232,7 +272,7 @@ router.post(
       return;
     }
     if (existing.isActive === true) {
-      res.status(200).json(formatEquipment(existing));
+      res.status(200).json(formatEquipmentRow(existing, null));
       return;
     }
     const [row] = await db
@@ -248,7 +288,7 @@ router.post(
       oldValues: existing as Record<string, unknown>,
       newValues: row as Record<string, unknown>,
     });
-    res.status(200).json(formatEquipment(row));
+    res.status(200).json(formatEquipmentRow(row, null));
   }),
 );
 
