@@ -7,6 +7,8 @@ import {
   useListEquipments,
   useCreateEquipment,
   useUpdateEquipment,
+  useDeleteEquipment,
+  useReactivateEquipment,
   useListProducts,
   useCreateProduct,
   useUpdateProduct,
@@ -459,56 +461,156 @@ function UsersTab() {
 }
 
 // ─── Equipments Tab ────────────────────────────────────────
-function EquipmentsTab() {
+type EquipmentRow = {
+  id: string;
+  name: string;
+  code: string;
+  description?: string | null;
+  trsObjective: number;
+  equipmentType?: string | null;
+  roomId?: string | null;
+  roomLabel?: string | null;
+  isActive: boolean;
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function extractErrorMessage(err: unknown): string {
+  if (err && typeof err === "object") {
+    const maybeData =
+      (err as { response?: { data?: unknown }; data?: unknown }).response?.data ??
+      (err as { data?: unknown }).data;
+    if (maybeData && typeof maybeData === "object") {
+      const candidate =
+        (maybeData as { error?: unknown; message?: unknown }).error ??
+        (maybeData as { error?: unknown; message?: unknown }).message;
+      if (typeof candidate === "string" && candidate.trim() !== "") return candidate;
+    }
+    const message = (err as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim() !== "") {
+      const trimmed = message.trim();
+      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        try {
+          const parsed = JSON.parse(trimmed) as { error?: unknown; message?: unknown };
+          if (typeof parsed.error === "string" && parsed.error) return parsed.error;
+          if (typeof parsed.message === "string" && parsed.message) return parsed.message;
+        } catch {
+          // fall through
+        }
+      }
+      return trimmed;
+    }
+  }
+  return "Une erreur est survenue";
+}
+
+export function EquipmentsTab() {
   const qc = useQueryClient();
-  const { data: equipments } = useListEquipments();
+  const [includeInactive, setIncludeInactive] = useState(false);
+  const { data: equipments } = useListEquipments({ includeInactive });
   const createEquipment = useCreateEquipment();
   const updateEquipment = useUpdateEquipment();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", code: "", description: "", trsObjective: 75 });
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    name: "",
+    code: "",
+    description: "",
+    trsObjective: 75,
+    equipmentType: "",
+    roomId: "",
+  });
+  const [deleteConfirm, setDeleteConfirmRaw] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [roomIdError, setRoomIdError] = useState<string | null>(null);
 
-  const deleteEquipment = useMutation({
-    mutationFn: (id: string) => apiDelete(`/api/equipments/${id}`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: getListEquipmentsQueryKey() });
-      setDeleteConfirm(null);
+  // Invalidate every cached variant of /api/equipments (review #4) — both
+  // the active-only default view and the includeInactive=true view — by
+  // matching the queryKey prefix produced by getListEquipmentsQueryKey().
+  const invalidateList = () => qc.invalidateQueries({ queryKey: getListEquipmentsQueryKey() });
+
+  const setDeleteConfirm = (id: string | null) => {
+    setActionError(null);
+    setDeleteConfirmRaw(id);
+  };
+
+  const deleteEquipment = useDeleteEquipment({
+    mutation: {
+      onSuccess: () => {
+        invalidateList();
+        setDeleteConfirmRaw(null);
+        setActionError(null);
+      },
+      onError: (err: unknown) => {
+        setActionError(extractErrorMessage(err));
+      },
+    },
+  });
+  const reactivateEquipment = useReactivateEquipment({
+    mutation: {
+      onSuccess: () => {
+        invalidateList();
+        setActionError(null);
+      },
+      onError: (err: unknown) => {
+        setActionError(extractErrorMessage(err));
+      },
     },
   });
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", code: "", description: "", trsObjective: 75 });
+    setForm({
+      name: "",
+      code: "",
+      description: "",
+      trsObjective: 75,
+      equipmentType: "",
+      roomId: "",
+    });
+    setActionError(null);
+    setRoomIdError(null);
     setOpen(true);
   };
-  const openEdit = (e: {
-    id: string;
-    name: string;
-    code: string;
-    description?: string | null;
-    trsObjective: number;
-  }) => {
+  const openEdit = (e: EquipmentRow) => {
     setEditing(e.id);
     setForm({
       name: e.name,
       code: e.code,
       description: e.description ?? "",
       trsObjective: e.trsObjective,
+      equipmentType: e.equipmentType ?? "",
+      roomId: e.roomId ?? "",
     });
+    setActionError(null);
+    setRoomIdError(null);
     setOpen(true);
   };
   const handleSave = async () => {
+    setActionError(null);
+    setRoomIdError(null);
+    // Client-side UUID validation (review #5). Empty string remains valid
+    // (= clear the link). No rooms picker — out of scope per review note.
+    if (form.roomId && !UUID_RE.test(form.roomId)) {
+      setRoomIdError("Identifiant UUID invalide.");
+      return;
+    }
     const payload = {
       name: form.name,
       code: form.code,
       description: form.description || undefined,
       trsObjective: Number(form.trsObjective),
+      equipmentType: form.equipmentType || undefined,
+      roomId: form.roomId || undefined,
     };
-    if (editing) await updateEquipment.mutateAsync({ id: editing, data: payload });
-    else await createEquipment.mutateAsync({ data: payload });
-    qc.invalidateQueries({ queryKey: getListEquipmentsQueryKey() });
-    setOpen(false);
+    try {
+      if (editing) await updateEquipment.mutateAsync({ id: editing, data: payload });
+      else await createEquipment.mutateAsync({ data: payload });
+      invalidateList();
+      setOpen(false);
+    } catch (err) {
+      setActionError(extractErrorMessage(err));
+    }
   };
 
   return (
@@ -519,11 +621,22 @@ function EquipmentsTab() {
         onAdd={openCreate}
         addLabel="Nouvel équipement"
       />
+      <div className="flex items-center justify-between border border-border rounded-lg px-4 py-2">
+        <Label htmlFor="equipments-include-inactive" className="text-sm">
+          Afficher les inactifs
+        </Label>
+        <Switch
+          id="equipments-include-inactive"
+          checked={includeInactive}
+          onCheckedChange={setIncludeInactive}
+        />
+      </div>
+      {actionError && <p className="text-xs text-red-500">{actionError}</p>}
       <TableWrapper>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40">
-              {["Code", "Nom", "Objectif TRS", "Actif", ""].map((h) => (
+              {["Code", "Nom", "Type", "Local", "Objectif TRS", "Statut", ""].map((h) => (
                 <th
                   key={h}
                   className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase"
@@ -534,70 +647,73 @@ function EquipmentsTab() {
             </tr>
           </thead>
           <tbody>
-            {equipments?.map(
-              (e: {
-                id: string;
-                name: string;
-                code: string;
-                description?: string | null;
-                trsObjective: number;
-                isActive: boolean;
-              }) => (
-                <tr
-                  key={e.id}
-                  className="border-b border-border/50 hover:bg-muted/30 transition-colors"
-                >
-                  <td className="px-4 py-3 font-mono text-xs font-bold">{e.code}</td>
-                  <td className="px-4 py-3 font-medium">{e.name}</td>
-                  <td className="px-4 py-3 tabular-nums">{e.trsObjective}%</td>
-                  <td className="px-4 py-3">
-                    {e.isActive ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
+            {equipments?.map((e: EquipmentRow) => (
+              <tr
+                key={e.id}
+                className="border-b border-border/50 hover:bg-muted/30 transition-colors"
+              >
+                <td className="px-4 py-3 font-mono text-xs font-bold">{e.code}</td>
+                <td className="px-4 py-3 font-medium">{e.name}</td>
+                <td className="px-4 py-3 text-muted-foreground text-xs">
+                  {e.equipmentType ?? "—"}
+                </td>
+                <td className="px-4 py-3 text-muted-foreground text-xs">{e.roomLabel ?? "—"}</td>
+                <td className="px-4 py-3 tabular-nums">{e.trsObjective}%</td>
+                <td className="px-4 py-3">
+                  <StatusBadge active={e.isActive} />
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex justify-end items-center gap-1">
+                    {!e.isActive ? (
+                      <button
+                        title="Réactiver"
+                        className="h-9 px-2.5 flex items-center gap-1 rounded-lg text-sky-500 hover:bg-sky-500/10 text-xs font-medium"
+                        onClick={() => {
+                          setActionError(null);
+                          reactivateEquipment.mutate({ id: e.id });
+                        }}
+                      >
+                        <RefreshCw className="h-4 w-4" /> Réactiver
+                      </button>
+                    ) : deleteConfirm === e.id ? (
+                      <>
+                        <span className="text-xs text-red-400 mr-1">Désactiver ?</span>
+                        <button
+                          className="h-8 px-2.5 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600"
+                          onClick={() => {
+                            setActionError(null);
+                            deleteEquipment.mutate({ id: e.id });
+                          }}
+                        >
+                          Oui
+                        </button>
+                        <button
+                          className="h-8 px-2.5 rounded-lg border border-border text-xs hover:bg-muted"
+                          onClick={() => setDeleteConfirm(null)}
+                        >
+                          Non
+                        </button>
+                      </>
                     ) : (
-                      <XCircle className="h-4 w-4 text-muted-foreground" />
+                      <>
+                        <button
+                          className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted"
+                          onClick={() => openEdit(e)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button
+                          className="h-9 w-9 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-500/10"
+                          onClick={() => setDeleteConfirm(e.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </>
                     )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end items-center gap-1">
-                      {deleteConfirm === e.id ? (
-                        <>
-                          <span className="text-xs text-red-400 mr-1">Désactiver ?</span>
-                          <button
-                            className="h-8 px-2.5 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600"
-                            onClick={() => deleteEquipment.mutate(e.id)}
-                          >
-                            Oui
-                          </button>
-                          <button
-                            className="h-8 px-2.5 rounded-lg border border-border text-xs hover:bg-muted"
-                            onClick={() => setDeleteConfirm(null)}
-                          >
-                            Non
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted"
-                            onClick={() => openEdit(e)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          {e.isActive && (
-                            <button
-                              className="h-9 w-9 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-500/10"
-                              onClick={() => setDeleteConfirm(e.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ),
-            )}
+                  </div>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </TableWrapper>
@@ -611,6 +727,7 @@ function EquipmentsTab() {
               { l: "Nom", k: "name" },
               { l: "Code", k: "code" },
               { l: "Description", k: "description" },
+              { l: "Type", k: "equipmentType" },
             ].map(({ l, k }) => (
               <div key={k} className="space-y-1.5">
                 <Label>{l}</Label>
@@ -622,6 +739,25 @@ function EquipmentsTab() {
               </div>
             ))}
             <div className="space-y-1.5">
+              <Label>Local (UUID)</Label>
+              <Input
+                value={form.roomId}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, roomId: e.target.value }));
+                  setRoomIdError(null);
+                }}
+                className="h-11"
+                placeholder="ex. 11111111-1111-1111-1111-111111111111"
+              />
+              {roomIdError ? (
+                <p className="text-xs text-red-500">{roomIdError}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Identifiant UUID de la salle (optionnel).
+                </p>
+              )}
+            </div>
+            <div className="space-y-1.5">
               <Label>Objectif TRS (%)</Label>
               <Input
                 type="number"
@@ -632,6 +768,7 @@ function EquipmentsTab() {
                 className="h-11"
               />
             </div>
+            {actionError && <p className="text-xs text-red-500">{actionError}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" className="h-11" onClick={() => setOpen(false)}>
