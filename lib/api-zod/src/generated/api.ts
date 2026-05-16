@@ -145,7 +145,7 @@ export const ListEquipmentsResponseItem = zod.object({
   roomLabel: zod
     .string()
     .nullish()
-    .describe("Derived label `code - name` of the linked room, populated only on list responses."),
+    .describe("Derived label `code - name` of the linked room when `roomId` is set."),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -195,7 +195,7 @@ export const UpdateEquipmentResponse = zod.object({
   roomLabel: zod
     .string()
     .nullish()
-    .describe("Derived label `code - name` of the linked room, populated only on list responses."),
+    .describe("Derived label `code - name` of the linked room when `roomId` is set."),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -218,7 +218,7 @@ export const DeleteEquipmentResponse = zod.object({
   roomLabel: zod
     .string()
     .nullish()
-    .describe("Derived label `code - name` of the linked room, populated only on list responses."),
+    .describe("Derived label `code - name` of the linked room when `roomId` is set."),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -241,7 +241,7 @@ export const ReactivateEquipmentResponse = zod.object({
   roomLabel: zod
     .string()
     .nullish()
-    .describe("Derived label `code - name` of the linked room, populated only on list responses."),
+    .describe("Derived label `code - name` of the linked room when `roomId` is set."),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
 });

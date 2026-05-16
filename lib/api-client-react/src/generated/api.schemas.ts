@@ -87,7 +87,7 @@ export interface Equipment {
   /** @nullable */
   roomId?: string | null;
   /**
-   * Derived label `code - name` of the linked room, populated only on list responses.
+   * Derived label `code - name` of the linked room when `roomId` is set.
    * @nullable
    */
   roomLabel?: string | null;

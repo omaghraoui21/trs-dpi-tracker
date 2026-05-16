@@ -40,6 +40,17 @@ function formatEquipmentRow(e: EquipmentRow, room: RoomLabelInput) {
 // reactivate) so the body matches the next GET. One extra SELECT only when
 // the row actually links to a room; the rooms table is small and these write
 // paths are not on the hot path.
+//
+// Best-effort by design: there is a TOCTOU window between the equipment write
+// (already committed when this helper is called) and the room SELECT below.
+// If a concurrent transaction deletes the linked room in that window, the
+// helper falls through to roomLabel=null even though e.roomId is non-null.
+// That body shape is identical to what the next GET would return (the leftJoin
+// also yields null on a missing room), so the response is internally
+// consistent. Folding the room into the equipment write's RETURNING via a
+// joined SELECT would close the window but would still need a manual
+// round-trip (Drizzle's update().returning() does not natively join), so we
+// accept this best-effort behavior for the admin UX.
 async function formatEquipmentRowAsync(e: EquipmentRow) {
   if (!e.roomId) {
     return formatEquipmentRow(e, null);

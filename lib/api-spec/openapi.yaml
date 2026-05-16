@@ -1410,7 +1410,7 @@ components:
           format: uuid
         roomLabel:
           type: ["string", "null"]
-          description: Derived label `code - name` of the linked room, populated only on list responses.
+          description: Derived label `code - name` of the linked room when `roomId` is set.
         isActive:
           type: boolean
         createdAt:
