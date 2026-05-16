@@ -36,6 +36,21 @@ function formatEquipmentRow(e: EquipmentRow, room: RoomLabelInput) {
   };
 }
 
+// Resolve roomLabel for write-path responses (POST/PATCH/DELETE-deactivate/
+// reactivate) so the body matches the next GET. One extra SELECT only when
+// the row actually links to a room; the rooms table is small and these write
+// paths are not on the hot path.
+async function formatEquipmentRowAsync(e: EquipmentRow) {
+  if (!e.roomId) {
+    return formatEquipmentRow(e, null);
+  }
+  const [room] = await db
+    .select({ code: roomsTable.code, name: roomsTable.name })
+    .from(roomsTable)
+    .where(eq(roomsTable.id, e.roomId));
+  return formatEquipmentRow(e, room ?? null);
+}
+
 router.get(
   "/equipments",
   requireAuth,
@@ -87,6 +102,7 @@ router.post(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
+    // Code is the establishing identifier on create; immutability only applies to subsequent PATCH.
     try {
       const [row] = await db
         .insert(equipmentsTable)
@@ -102,7 +118,7 @@ router.post(
         action: "create",
         newValues: row as Record<string, unknown>,
       });
-      res.status(201).json(formatEquipmentRow(row, null));
+      res.status(201).json(await formatEquipmentRowAsync(row));
     } catch (err) {
       const mapped = mapDbError(err);
       if (mapped) {
@@ -142,7 +158,7 @@ router.patch(
       if (deps.historical > 0) {
         res.status(409).json({
           error:
-            "Le code est immuable: cet équipement est référencé par des données historiques (production, arrêts, KPI ou cadences).",
+            "Le code est immuable: cet équipement est référencé par des données historiques (production, saisies journalières, arrêts, KPI ou cadences).",
         });
         return;
       }
@@ -169,7 +185,7 @@ router.patch(
         oldValues: existing as Record<string, unknown>,
         newValues: row as Record<string, unknown>,
       });
-      res.json(formatEquipmentRow(row, null));
+      res.json(await formatEquipmentRowAsync(row));
     } catch (err) {
       const mapped = mapDbError(err);
       if (mapped) {
@@ -198,7 +214,7 @@ router.delete(
     }
 
     if (existing.isActive === false) {
-      res.status(200).json(formatEquipmentRow(existing, null));
+      res.status(200).json(await formatEquipmentRowAsync(existing));
       return;
     }
 
@@ -249,7 +265,7 @@ router.delete(
       oldValues: existing as Record<string, unknown>,
       newValues: row as Record<string, unknown>,
     });
-    res.status(200).json(formatEquipmentRow(row, null));
+    res.status(200).json(await formatEquipmentRowAsync(row));
   }),
 );
 
@@ -272,7 +288,7 @@ router.post(
       return;
     }
     if (existing.isActive === true) {
-      res.status(200).json(formatEquipmentRow(existing, null));
+      res.status(200).json(await formatEquipmentRowAsync(existing));
       return;
     }
     const [row] = await db
@@ -288,7 +304,7 @@ router.post(
       oldValues: existing as Record<string, unknown>,
       newValues: row as Record<string, unknown>,
     });
-    res.status(200).json(formatEquipmentRow(row, null));
+    res.status(200).json(await formatEquipmentRowAsync(row));
   }),
 );
 
