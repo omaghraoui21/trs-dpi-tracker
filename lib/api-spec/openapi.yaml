@@ -1594,7 +1594,7 @@ components:
         shortcutEquipments:
           type: ["string", "null"]
           description: "Comma-separated list of equipment codes (free-form, nullable). Empty/null means the shortcut applies to all equipments."
-      required: [id, code, label, impactType, isPlanned, requiresComment, isActive, isQuickShortcut]
+      required: [id, code, label, impactType, impactKpi, isPlanned, requiresComment, isActive, isQuickShortcut]
 
     CreateDowntimeCategoryBody:
       type: object

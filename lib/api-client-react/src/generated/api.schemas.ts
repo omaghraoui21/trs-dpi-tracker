@@ -223,7 +223,7 @@ export interface DowntimeCategory {
    * KPI dimension this category impacts (TRS / TRG / TRE / DO / TP / TQ / PLANNING)
    * @nullable
    */
-  impactKpi?: DowntimeCategoryImpactKpi;
+  impactKpi: DowntimeCategoryImpactKpi;
   /** Whether this is a planned stop */
   isPlanned: boolean;
   requiresComment: boolean;

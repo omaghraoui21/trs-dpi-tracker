@@ -1488,6 +1488,7 @@ export function CategoriesTab() {
                     ) : (
                       <>
                         <button
+                          title="Modifier"
                           className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted"
                           onClick={() => {
                             setActionError(null);

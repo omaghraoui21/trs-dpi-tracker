@@ -425,7 +425,7 @@ export const ListDowntimeCategoriesResponseItem = zod.object({
       zod.literal("PLANNING"),
       zod.literal(null),
     ])
-    .nullish()
+    .nullable()
     .describe(
       "KPI dimension this category impacts (TRS \/ TRG \/ TRE \/ DO \/ TP \/ TQ \/ PLANNING)",
     ),
@@ -559,7 +559,7 @@ export const UpdateDowntimeCategoryResponse = zod.object({
       zod.literal("PLANNING"),
       zod.literal(null),
     ])
-    .nullish()
+    .nullable()
     .describe(
       "KPI dimension this category impacts (TRS \/ TRG \/ TRE \/ DO \/ TP \/ TQ \/ PLANNING)",
     ),
@@ -614,7 +614,7 @@ export const DeleteDowntimeCategoryResponse = zod.object({
       zod.literal("PLANNING"),
       zod.literal(null),
     ])
-    .nullish()
+    .nullable()
     .describe(
       "KPI dimension this category impacts (TRS \/ TRG \/ TRE \/ DO \/ TP \/ TQ \/ PLANNING)",
     ),
@@ -669,7 +669,7 @@ export const ReactivateDowntimeCategoryResponse = zod.object({
       zod.literal("PLANNING"),
       zod.literal(null),
     ])
-    .nullish()
+    .nullable()
     .describe(
       "KPI dimension this category impacts (TRS \/ TRG \/ TRE \/ DO \/ TP \/ TQ \/ PLANNING)",
     ),

@@ -19,7 +19,11 @@
 // { isQuickShortcut: true, shortcutEquipments: "A27", impactKpi: "TRS" }
 // populated. We then assert the Switch is checked, the Input shows "A27",
 // and the Select trigger displays "TRS" — proving the round-trip wiring
-// from list -> openEdit -> form state -> rendered controls.
+// from list -> openEdit -> form state -> rendered controls. The same case
+// then clicks Enregistrer and asserts updateCat.mutateAsync received the
+// fully-shaped { id, data: { ... } } payload, proving the write path end
+// to end. Case 6 mirrors that with a null-impactKpi fixture to lock the
+// `form.impactKpi || null` empty-string-to-null normalization in handleSave.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -266,7 +270,7 @@ describe("CategoriesTab", () => {
     expect(screen.getByText("Cette catégorie a 4 événements d'arrêt liés.")).toBeTruthy();
   });
 
-  it("round-trips isQuickShortcut + shortcutEquipments + impactKpi in EDIT mode", () => {
+  it("round-trips isQuickShortcut + shortcutEquipments + impactKpi in EDIT mode", async () => {
     // FALLBACK path (see file docstring): driving the Radix Select via
     // fireEvent under jsdom is fragile, so we pre-populate the fixture and
     // open the dialog in EDIT mode. This proves the openEdit -> form state ->
@@ -289,15 +293,10 @@ describe("CategoriesTab", () => {
 
     render(<CategoriesTab />);
 
-    // Click the Edit button on the only row.
-    const editButtons = screen.getAllByRole("button");
-    // The Edit button has no accessible name (only an icon). lucide-react
-    // exports `Edit` as an alias for `SquarePen`, so the rendered svg has the
-    // `lucide-square-pen` class. We pick the first action button rendered
-    // when the row is active and no delete is in flight.
-    const editButton = editButtons.find((b) => b.querySelector("svg.lucide-square-pen"));
-    expect(editButton).toBeDefined();
-    fireEvent.click(editButton!);
+    // The Edit button now exposes an accessible name via `title="Modifier"`,
+    // so we no longer have to query the lucide-react SVG class.
+    const editButton = screen.getByRole("button", { name: /modifier/i });
+    fireEvent.click(editButton);
 
     // Switch should be checked (Radix Switch maps `checked` -> aria-checked).
     const switches = screen.getAllByRole("switch");
@@ -317,5 +316,74 @@ describe("CategoriesTab", () => {
       .getAllByRole("combobox")
       .find((el) => el.textContent?.includes("TRS"));
     expect(kpiTrigger).toBeDefined();
+
+    // Write path: clicking Enregistrer must ship the form payload to
+    // updateCat.mutateAsync. This proves handleSave constructs
+    // { id, data: { impactKpi, isQuickShortcut, shortcutEquipments, ... } }
+    // correctly when the form was populated from openEdit. The expression
+    // `form.impactKpi || null` evaluates to the literal "TRS" here (truthy
+    // string survives the `||`), not null. See case 6 below for the
+    // null-normalization branch.
+    //
+    // Note: the mock factory rebinds `state.updateCaptured` on every render,
+    // so we capture the reference held by the component closure BEFORE
+    // clicking save, then assert against that captured object.
+    const captured = state.updateCaptured!;
+    const saveButton = screen.getByRole("button", { name: /enregistrer/i });
+    await act(async () => {
+      fireEvent.click(saveButton);
+    });
+
+    expect(captured.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(captured.mutateAsync.mock.calls[0][0]).toEqual({
+      id: "cat-1",
+      data: expect.objectContaining({
+        impactKpi: "TRS",
+        isQuickShortcut: true,
+        shortcutEquipments: "A27",
+      }),
+    });
+  });
+
+  it("normalizes empty impactKpi to null when saving an EDIT against a fixture without impactKpi", async () => {
+    // Companion case to the round-trip above: when the source row has
+    // impactKpi: null, openEdit seeds form.impactKpi to "" (empty string),
+    // and handleSave's `form.impactKpi || null` MUST collapse that empty
+    // string to a literal `null` on the wire (not undefined, not "").
+    state.categories = [
+      {
+        id: "cat-1",
+        code: "PANNE",
+        label: "Panne machine",
+        impactType: "tF",
+        impactKpi: null,
+        isPlanned: false,
+        requiresComment: false,
+        isActive: true,
+        isQuickShortcut: false,
+        shortcutEquipments: null,
+      },
+    ];
+
+    render(<CategoriesTab />);
+
+    const editButton = screen.getByRole("button", { name: /modifier/i });
+    fireEvent.click(editButton);
+
+    const captured = state.updateCaptured!;
+    const saveButton = screen.getByRole("button", { name: /enregistrer/i });
+    await act(async () => {
+      fireEvent.click(saveButton);
+    });
+
+    expect(captured.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(captured.mutateAsync.mock.calls[0][0]).toEqual({
+      id: "cat-1",
+      data: expect.objectContaining({
+        impactKpi: null,
+        isQuickShortcut: false,
+        shortcutEquipments: null,
+      }),
+    });
   });
 });
