@@ -192,6 +192,14 @@ paths:
       operationId: listEquipments
       tags: [equipments]
       summary: List all equipments
+      parameters:
+        - name: includeInactive
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Include inactive (soft-deleted) entries in the response.
       responses:
         "200":
           description: List of equipments
@@ -218,6 +226,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Equipment"
+        "409":
+          description: Duplicate code (unique constraint violation)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferentialDeleteBlocked"
 
   /equipments/{id}:
     patch:
@@ -244,6 +258,62 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Equipment"
+        "409":
+          description: Duplicate code (unique constraint violation)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferentialDeleteBlocked"
+    delete:
+      operationId: deleteEquipment
+      tags: [equipments]
+      summary: Delete or deactivate an equipment depending on dependencies
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Hard-deleted (no dependencies existed)
+        "200":
+          description: Deactivated (historical dependencies exist) returns the deactivated row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Equipment"
+        "409":
+          description: Deletion blocked active/open dependencies prevent deactivation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferentialDeleteBlocked"
+        "404":
+          description: Resource not found
+
+  /equipments/{id}/reactivate:
+    post:
+      operationId: reactivateEquipment
+      tags: [equipments]
+      summary: Reactivate a previously deactivated equipment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Reactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Equipment"
+        "404":
+          description: Resource not found
 
   # Products
   /products:
@@ -251,6 +321,14 @@ paths:
       operationId: listProducts
       tags: [products]
       summary: List all products
+      parameters:
+        - name: includeInactive
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Include inactive (soft-deleted) entries in the response.
       responses:
         "200":
           description: List of products
@@ -277,6 +355,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Product"
+        "409":
+          description: Duplicate code (unique constraint violation)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferentialDeleteBlocked"
 
   /products/{id}:
     patch:
@@ -303,6 +387,62 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Product"
+        "409":
+          description: Duplicate code (unique constraint violation)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferentialDeleteBlocked"
+    delete:
+      operationId: deleteProduct
+      tags: [products]
+      summary: Delete or deactivate a product depending on dependencies
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Hard-deleted (no dependencies existed)
+        "200":
+          description: Deactivated (historical dependencies exist) returns the deactivated row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "409":
+          description: Deletion blocked active/open dependencies prevent deactivation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferentialDeleteBlocked"
+        "404":
+          description: Resource not found
+
+  /products/{id}/reactivate:
+    post:
+      operationId: reactivateProduct
+      tags: [products]
+      summary: Reactivate a previously deactivated product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Reactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "404":
+          description: Resource not found
 
   # Cadences
   /cadences:
@@ -354,6 +494,14 @@ paths:
       operationId: listDowntimeCategories
       tags: [downtime-categories]
       summary: List all downtime categories
+      parameters:
+        - name: includeInactive
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Include inactive (soft-deleted) entries in the response.
       responses:
         "200":
           description: List of downtime categories
@@ -380,6 +528,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DowntimeCategory"
+        "409":
+          description: Duplicate code (unique constraint violation)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferentialDeleteBlocked"
 
   /downtime-categories/{id}:
     patch:
@@ -406,6 +560,62 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DowntimeCategory"
+        "409":
+          description: Duplicate code (unique constraint violation)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferentialDeleteBlocked"
+    delete:
+      operationId: deleteDowntimeCategory
+      tags: [downtime-categories]
+      summary: Delete or deactivate a downtime category depending on dependencies
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Hard-deleted (no dependencies existed)
+        "200":
+          description: Deactivated (historical dependencies exist) returns the deactivated row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DowntimeCategory"
+        "409":
+          description: Deletion blocked active/open dependencies prevent deactivation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReferentialDeleteBlocked"
+        "404":
+          description: Resource not found
+
+  /downtime-categories/{id}/reactivate:
+    post:
+      operationId: reactivateDowntimeCategory
+      tags: [downtime-categories]
+      summary: Reactivate a previously deactivated downtime category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Reactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DowntimeCategory"
+        "404":
+          description: Resource not found
 
   # Production entries
   /production-entries:
@@ -1095,6 +1305,15 @@ components:
       required:
         - status
 
+    # Shared error schema for referential delete decisions and unique-constraint violations.
+    ReferentialDeleteBlocked:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Human-readable French message listing the offending dependent tables and counts.
+      required: [error]
+
     # Auth
     LoginBody:
       type: object
@@ -1487,7 +1706,24 @@ components:
         updatedAt:
           type: string
           format: date-time
-      required: [id, date, equipmentId, productId, batchNumber, shift, shiftStart, shiftEnd, quantityProduced, quantityConforming, quantityRejected, status, operatorId, createdAt, updatedAt]
+      required:
+        [
+          id,
+          date,
+          equipmentId,
+          productId,
+          batchNumber,
+          shift,
+          shiftStart,
+          shiftEnd,
+          quantityProduced,
+          quantityConforming,
+          quantityRejected,
+          status,
+          operatorId,
+          createdAt,
+          updatedAt,
+        ]
 
     ProductionEntryWithDetails:
       allOf:
@@ -1533,7 +1769,19 @@ components:
           type: integer
         quantityRejected:
           type: integer
-      required: [date, equipmentId, productId, batchNumber, shift, shiftStart, shiftEnd, quantityProduced, quantityConforming, quantityRejected]
+      required:
+        [
+          date,
+          equipmentId,
+          productId,
+          batchNumber,
+          shift,
+          shiftStart,
+          shiftEnd,
+          quantityProduced,
+          quantityConforming,
+          quantityRejected,
+        ]
 
     UpdateProductionEntryBody:
       type: object
@@ -1619,7 +1867,24 @@ components:
         cadenceGap:
           type: number
           description: Gap between validated and actual cadence
-      required: [tT, tO, tR, tF, tN, tU, DO, TP, TQ, TRS, TRG, TRE, plannedDowntimeMinutes, unplannedDowntimeMinutes, cadenceGap]
+      required:
+        [
+          tT,
+          tO,
+          tR,
+          tF,
+          tN,
+          tU,
+          DO,
+          TP,
+          TQ,
+          TRS,
+          TRG,
+          TRE,
+          plannedDowntimeMinutes,
+          unplannedDowntimeMinutes,
+          cadenceGap,
+        ]
 
     # Dashboard types
     DashboardSummary:
@@ -1656,7 +1921,23 @@ components:
           type: integer
         totalRejected:
           type: integer
-      required: [currentMonthTrs, currentMonthDO, currentMonthTP, currentMonthTQ, trsObjective, entriesThisMonth, pendingValidations, validatedEntries, rejectedEntries, productionDays, offDays, totalQuantityProduced, totalQuantityConforming, totalRejected]
+      required:
+        [
+          currentMonthTrs,
+          currentMonthDO,
+          currentMonthTP,
+          currentMonthTQ,
+          trsObjective,
+          entriesThisMonth,
+          pendingValidations,
+          validatedEntries,
+          rejectedEntries,
+          productionDays,
+          offDays,
+          totalQuantityProduced,
+          totalQuantityConforming,
+          totalRejected,
+        ]
 
     DailyTrsPoint:
       type: object
@@ -1706,7 +1987,16 @@ components:
           type: number
         isPlanned:
           type: boolean
-      required: [categoryCode, categoryLabel, totalMinutes, occurrences, percentage, cumulativePercentage, isPlanned]
+      required:
+        [
+          categoryCode,
+          categoryLabel,
+          totalMinutes,
+          occurrences,
+          percentage,
+          cumulativePercentage,
+          isPlanned,
+        ]
 
     EquipmentComparisonItem:
       type: object
@@ -1768,7 +2058,18 @@ components:
           type: number
         totalDowntimeUnplanned:
           type: number
-      required: [month, year, trsObjective, totalTR, totalTU, totalTF, totalTN, totalDowntimePlanned, totalDowntimeUnplanned]
+      required:
+        [
+          month,
+          year,
+          trsObjective,
+          totalTR,
+          totalTU,
+          totalTF,
+          totalTN,
+          totalDowntimePlanned,
+          totalDowntimeUnplanned,
+        ]
 
     # Monthly closures
     MonthlyClosure:
@@ -1912,7 +2213,18 @@ components:
           type: string
         importedByName:
           type: ["string", "null"]
-      required: [id, weekNumber, year, date, dayName, activityType, sourceFileName, importedAt, validationStatus]
+      required:
+        [
+          id,
+          weekNumber,
+          year,
+          date,
+          dayName,
+          activityType,
+          sourceFileName,
+          importedAt,
+          validationStatus,
+        ]
 
     PlanWeekSummary:
       type: object

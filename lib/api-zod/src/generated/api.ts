@@ -128,6 +128,15 @@ export const DeleteUserParams = zod.object({
 /**
  * @summary List all equipments
  */
+export const listEquipmentsQueryIncludeInactiveDefault = false;
+
+export const ListEquipmentsQueryParams = zod.object({
+  includeInactive: zod.coerce
+    .boolean()
+    .default(listEquipmentsQueryIncludeInactiveDefault)
+    .describe("Include inactive (soft-deleted) entries in the response."),
+});
+
 export const ListEquipmentsResponseItem = zod.object({
   id: zod.string().uuid(),
   name: zod.string(),
@@ -175,8 +184,51 @@ export const UpdateEquipmentResponse = zod.object({
 });
 
 /**
+ * @summary Delete or deactivate an equipment depending on dependencies
+ */
+export const DeleteEquipmentParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const DeleteEquipmentResponse = zod.object({
+  id: zod.string().uuid(),
+  name: zod.string(),
+  code: zod.string(),
+  description: zod.string().nullish(),
+  trsObjective: zod.number().describe("Target TRS percentage (0-100)"),
+  isActive: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Reactivate a previously deactivated equipment
+ */
+export const ReactivateEquipmentParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const ReactivateEquipmentResponse = zod.object({
+  id: zod.string().uuid(),
+  name: zod.string(),
+  code: zod.string(),
+  description: zod.string().nullish(),
+  trsObjective: zod.number().describe("Target TRS percentage (0-100)"),
+  isActive: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
  * @summary List all products
  */
+export const listProductsQueryIncludeInactiveDefault = false;
+
+export const ListProductsQueryParams = zod.object({
+  includeInactive: zod.coerce
+    .boolean()
+    .default(listProductsQueryIncludeInactiveDefault)
+    .describe("Include inactive (soft-deleted) entries in the response."),
+});
+
 export const ListProductsResponseItem = zod.object({
   id: zod.string().uuid(),
   name: zod.string(),
@@ -220,6 +272,38 @@ export const UpdateProductResponse = zod.object({
 });
 
 /**
+ * @summary Delete or deactivate a product depending on dependencies
+ */
+export const DeleteProductParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const DeleteProductResponse = zod.object({
+  id: zod.string().uuid(),
+  name: zod.string(),
+  code: zod.string(),
+  description: zod.string().nullish(),
+  isActive: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Reactivate a previously deactivated product
+ */
+export const ReactivateProductParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const ReactivateProductResponse = zod.object({
+  id: zod.string().uuid(),
+  name: zod.string(),
+  code: zod.string(),
+  description: zod.string().nullish(),
+  isActive: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
  * @summary List cadences by product and equipment
  */
 export const ListCadencesQueryParams = zod.object({
@@ -231,12 +315,8 @@ export const ListCadencesResponseItem = zod.object({
   id: zod.string().uuid(),
   productId: zod.string().uuid(),
   equipmentId: zod.string().uuid(),
-  theoreticalCadence: zod
-    .number()
-    .describe("Theoretical cadence (units\/hour)"),
-  validatedCadence: zod
-    .number()
-    .describe("Validated product cadence (units\/hour)"),
+  theoreticalCadence: zod.number().describe("Theoretical cadence (units\/hour)"),
+  validatedCadence: zod.number().describe("Validated product cadence (units\/hour)"),
   unit: zod.string().describe("Unit (blisters\/min, capsules\/min, etc.)"),
   productName: zod.string().nullish(),
   equipmentName: zod.string().nullish(),
@@ -258,12 +338,8 @@ export const UpsertCadenceResponse = zod.object({
   id: zod.string().uuid(),
   productId: zod.string().uuid(),
   equipmentId: zod.string().uuid(),
-  theoreticalCadence: zod
-    .number()
-    .describe("Theoretical cadence (units\/hour)"),
-  validatedCadence: zod
-    .number()
-    .describe("Validated product cadence (units\/hour)"),
+  theoreticalCadence: zod.number().describe("Theoretical cadence (units\/hour)"),
+  validatedCadence: zod.number().describe("Validated product cadence (units\/hour)"),
   unit: zod.string().describe("Unit (blisters\/min, capsules\/min, etc.)"),
   productName: zod.string().nullish(),
   equipmentName: zod.string().nullish(),
@@ -272,6 +348,15 @@ export const UpsertCadenceResponse = zod.object({
 /**
  * @summary List all downtime categories
  */
+export const listDowntimeCategoriesQueryIncludeInactiveDefault = false;
+
+export const ListDowntimeCategoriesQueryParams = zod.object({
+  includeInactive: zod.coerce
+    .boolean()
+    .default(listDowntimeCategoriesQueryIncludeInactiveDefault)
+    .describe("Include inactive (soft-deleted) entries in the response."),
+});
+
 export const ListDowntimeCategoriesResponseItem = zod.object({
   id: zod.string().uuid(),
   code: zod.string(),
@@ -290,9 +375,7 @@ export const ListDowntimeCategoriesResponseItem = zod.object({
   requiresComment: zod.boolean(),
   isActive: zod.boolean(),
 });
-export const ListDowntimeCategoriesResponse = zod.array(
-  ListDowntimeCategoriesResponseItem,
-);
+export const ListDowntimeCategoriesResponse = zod.array(ListDowntimeCategoriesResponseItem);
 
 /**
  * @summary Create a downtime category
@@ -301,10 +384,7 @@ export const CreateDowntimeCategoryBody = zod.object({
   code: zod.string(),
   label: zod.string(),
   description: zod.string().optional(),
-  famille: zod
-    .string()
-    .optional()
-    .describe("Family grouping for this stop category"),
+  famille: zod.string().optional().describe("Family grouping for this stop category"),
   impactType: zod.enum(["tO", "tR", "tF", "tN", "tU", "TQ"]),
   isPlanned: zod.boolean(),
   requiresComment: zod.boolean(),
@@ -321,10 +401,7 @@ export const UpdateDowntimeCategoryBody = zod.object({
   code: zod.string().optional(),
   label: zod.string().optional(),
   description: zod.string().optional(),
-  famille: zod
-    .string()
-    .optional()
-    .describe("Family grouping for this stop category"),
+  famille: zod.string().optional().describe("Family grouping for this stop category"),
   impactType: zod.enum(["tO", "tR", "tF", "tN", "tU", "TQ"]).optional(),
   isPlanned: zod.boolean().optional(),
   requiresComment: zod.boolean().optional(),
@@ -332,6 +409,58 @@ export const UpdateDowntimeCategoryBody = zod.object({
 });
 
 export const UpdateDowntimeCategoryResponse = zod.object({
+  id: zod.string().uuid(),
+  code: zod.string(),
+  label: zod.string(),
+  description: zod.string().nullish(),
+  famille: zod
+    .string()
+    .nullish()
+    .describe(
+      "Family grouping: Arrêts non planifiés | Problèmes de qualité | Arrêt technique | Attente et transition | Utilités",
+    ),
+  impactType: zod
+    .enum(["tO", "tR", "tF", "tN", "tU", "TQ"])
+    .describe("Which time dimension this category impacts"),
+  isPlanned: zod.boolean().describe("Whether this is a planned stop"),
+  requiresComment: zod.boolean(),
+  isActive: zod.boolean(),
+});
+
+/**
+ * @summary Delete or deactivate a downtime category depending on dependencies
+ */
+export const DeleteDowntimeCategoryParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const DeleteDowntimeCategoryResponse = zod.object({
+  id: zod.string().uuid(),
+  code: zod.string(),
+  label: zod.string(),
+  description: zod.string().nullish(),
+  famille: zod
+    .string()
+    .nullish()
+    .describe(
+      "Family grouping: Arrêts non planifiés | Problèmes de qualité | Arrêt technique | Attente et transition | Utilités",
+    ),
+  impactType: zod
+    .enum(["tO", "tR", "tF", "tN", "tU", "TQ"])
+    .describe("Which time dimension this category impacts"),
+  isPlanned: zod.boolean().describe("Whether this is a planned stop"),
+  requiresComment: zod.boolean(),
+  isActive: zod.boolean(),
+});
+
+/**
+ * @summary Reactivate a previously deactivated downtime category
+ */
+export const ReactivateDowntimeCategoryParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const ReactivateDowntimeCategoryResponse = zod.object({
   id: zod.string().uuid(),
   code: zod.string(),
   label: zod.string(),
@@ -419,16 +548,12 @@ export const ListProductionEntriesResponseItem = zod
           TRE: zod.number().describe("TRE = tU \/ tT (0-1)"),
           plannedDowntimeMinutes: zod.number(),
           unplannedDowntimeMinutes: zod.number(),
-          cadenceGap: zod
-            .number()
-            .describe("Gap between validated and actual cadence"),
+          cadenceGap: zod.number().describe("Gap between validated and actual cadence"),
         })
         .optional(),
     }),
   );
-export const ListProductionEntriesResponse = zod.array(
-  ListProductionEntriesResponseItem,
-);
+export const ListProductionEntriesResponse = zod.array(ListProductionEntriesResponseItem);
 
 /**
  * @summary Create a production entry
@@ -510,9 +635,7 @@ export const GetProductionEntryResponse = zod
           TRE: zod.number().describe("TRE = tU \/ tT (0-1)"),
           plannedDowntimeMinutes: zod.number(),
           unplannedDowntimeMinutes: zod.number(),
-          cadenceGap: zod
-            .number()
-            .describe("Gap between validated and actual cadence"),
+          cadenceGap: zod.number().describe("Gap between validated and actual cadence"),
         })
         .optional(),
     }),
@@ -595,9 +718,7 @@ export const UpdateProductionEntryResponse = zod
           TRE: zod.number().describe("TRE = tU \/ tT (0-1)"),
           plannedDowntimeMinutes: zod.number(),
           unplannedDowntimeMinutes: zod.number(),
-          cadenceGap: zod
-            .number()
-            .describe("Gap between validated and actual cadence"),
+          cadenceGap: zod.number().describe("Gap between validated and actual cadence"),
         })
         .optional(),
     }),
@@ -667,9 +788,7 @@ export const SubmitProductionEntryResponse = zod
           TRE: zod.number().describe("TRE = tU \/ tT (0-1)"),
           plannedDowntimeMinutes: zod.number(),
           unplannedDowntimeMinutes: zod.number(),
-          cadenceGap: zod
-            .number()
-            .describe("Gap between validated and actual cadence"),
+          cadenceGap: zod.number().describe("Gap between validated and actual cadence"),
         })
         .optional(),
     }),
@@ -744,9 +863,7 @@ export const ValidateProductionEntryResponse = zod
           TRE: zod.number().describe("TRE = tU \/ tT (0-1)"),
           plannedDowntimeMinutes: zod.number(),
           unplannedDowntimeMinutes: zod.number(),
-          cadenceGap: zod
-            .number()
-            .describe("Gap between validated and actual cadence"),
+          cadenceGap: zod.number().describe("Gap between validated and actual cadence"),
         })
         .optional(),
     }),
@@ -771,9 +888,7 @@ export const ListDowntimeEventsResponseItem = zod.object({
   comment: zod.string().nullish(),
   isDeleted: zod.boolean(),
 });
-export const ListDowntimeEventsResponse = zod.array(
-  ListDowntimeEventsResponseItem,
-);
+export const ListDowntimeEventsResponse = zod.array(ListDowntimeEventsResponseItem);
 
 /**
  * @summary Add a downtime event
@@ -902,9 +1017,7 @@ export const GetDowntimeParetoResponseItem = zod.object({
   cumulativePercentage: zod.number(),
   isPlanned: zod.boolean(),
 });
-export const GetDowntimeParetoResponse = zod.array(
-  GetDowntimeParetoResponseItem,
-);
+export const GetDowntimeParetoResponse = zod.array(GetDowntimeParetoResponseItem);
 
 /**
  * @summary Compare TRS across equipments
@@ -925,9 +1038,7 @@ export const GetEquipmentComparisonResponseItem = zod.object({
   trsObjective: zod.number(),
   productionDays: zod.number(),
 });
-export const GetEquipmentComparisonResponse = zod.array(
-  GetEquipmentComparisonResponseItem,
-);
+export const GetEquipmentComparisonResponse = zod.array(GetEquipmentComparisonResponseItem);
 
 /**
  * @summary Get monthly KPI breakdown (DO, TP, TQ, TRS)
@@ -1016,16 +1127,12 @@ export const GetPendingValidationsResponseItem = zod
           TRE: zod.number().describe("TRE = tU \/ tT (0-1)"),
           plannedDowntimeMinutes: zod.number(),
           unplannedDowntimeMinutes: zod.number(),
-          cadenceGap: zod
-            .number()
-            .describe("Gap between validated and actual cadence"),
+          cadenceGap: zod.number().describe("Gap between validated and actual cadence"),
         })
         .optional(),
     }),
   );
-export const GetPendingValidationsResponse = zod.array(
-  GetPendingValidationsResponseItem,
-);
+export const GetPendingValidationsResponse = zod.array(GetPendingValidationsResponseItem);
 
 /**
  * @summary List monthly closures
@@ -1044,9 +1151,7 @@ export const ListMonthlyClosuresResponseItem = zod.object({
   lockedAt: zod.coerce.date(),
   comment: zod.string().nullish(),
 });
-export const ListMonthlyClosuresResponse = zod.array(
-  ListMonthlyClosuresResponseItem,
-);
+export const ListMonthlyClosuresResponse = zod.array(ListMonthlyClosuresResponseItem);
 
 /**
  * @summary Lock a month after review
@@ -1184,9 +1289,7 @@ export const ListPlanningWeeksResponseItem = zod.object({
   sourceFileName: zod.string(),
   importedAt: zod.coerce.date(),
 });
-export const ListPlanningWeeksResponse = zod.array(
-  ListPlanningWeeksResponseItem,
-);
+export const ListPlanningWeeksResponse = zod.array(ListPlanningWeeksResponseItem);
 
 /**
  * @summary Validate or reject a plan entry
@@ -1229,9 +1332,7 @@ export const ListNotificationsResponseItem = zod.object({
   status: zod.enum(["open", "acknowledged", "closed"]),
   comment: zod.string().nullish(),
 });
-export const ListNotificationsResponse = zod.array(
-  ListNotificationsResponseItem,
-);
+export const ListNotificationsResponse = zod.array(ListNotificationsResponseItem);
 
 /**
  * @summary Create a notification

@@ -9,6 +9,11 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface ReferentialDeleteBlocked {
+  /** Human-readable French message listing the offending dependent tables and counts. */
+  error: string;
+}
+
 export interface LoginBody {
   email: string;
   password: string;
@@ -36,8 +41,7 @@ export interface LoginResponse {
   user: User;
 }
 
-export type CreateUserBodyRole =
-  (typeof CreateUserBodyRole)[keyof typeof CreateUserBodyRole];
+export type CreateUserBodyRole = (typeof CreateUserBodyRole)[keyof typeof CreateUserBodyRole];
 
 export const CreateUserBodyRole = {
   operator: "operator",
@@ -53,8 +57,7 @@ export interface CreateUserBody {
   role: CreateUserBodyRole;
 }
 
-export type UpdateUserBodyRole =
-  (typeof UpdateUserBodyRole)[keyof typeof UpdateUserBodyRole];
+export type UpdateUserBodyRole = (typeof UpdateUserBodyRole)[keyof typeof UpdateUserBodyRole];
 
 export const UpdateUserBodyRole = {
   operator: "operator",
@@ -659,9 +662,30 @@ export interface UpdateNotificationBody {
   comment?: string;
 }
 
+export type ListEquipmentsParams = {
+  /**
+   * Include inactive (soft-deleted) entries in the response.
+   */
+  includeInactive?: boolean;
+};
+
+export type ListProductsParams = {
+  /**
+   * Include inactive (soft-deleted) entries in the response.
+   */
+  includeInactive?: boolean;
+};
+
 export type ListCadencesParams = {
   productId?: string;
   equipmentId?: string;
+};
+
+export type ListDowntimeCategoriesParams = {
+  /**
+   * Include inactive (soft-deleted) entries in the response.
+   */
+  includeInactive?: boolean;
 };
 
 export type ListProductionEntriesParams = {
