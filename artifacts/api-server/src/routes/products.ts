@@ -1,8 +1,6 @@
-
 import { Router, IRouter } from "express";
 import { db, productsTable, cadencesTable, equipmentsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import { z } from "zod";
 import { requireAuth, requireRole } from "../middlewares/auth";
 import { mapDbError, isForeignKeyViolation } from "../lib/db-errors";
 import { countDependencies } from "../lib/referential-deps";
@@ -12,6 +10,7 @@ import {
   CreateProductBody,
   UpdateProductBody,
   UpdateProductParams,
+  ListProductsQueryParams,
   ListCadencesQueryParams,
   UpsertCadenceBody,
 } from "@workspace/api-zod";
@@ -30,11 +29,15 @@ function formatProduct(p: typeof productsTable.$inferSelect) {
 }
 
 router.get("/products", requireAuth, async (req, res): Promise<void> => {
-  const q = z.object({ includeInactive: z.coerce.boolean().optional() }).safeParse(req.query);
+  const q = ListProductsQueryParams.safeParse(req.query);
   const includeInactive = q.success ? q.data.includeInactive === true : false;
   const rows = includeInactive
     ? await db.select().from(productsTable).orderBy(productsTable.name)
-    : await db.select().from(productsTable).where(eq(productsTable.isActive, true)).orderBy(productsTable.name);
+    : await db
+        .select()
+        .from(productsTable)
+        .where(eq(productsTable.isActive, true))
+        .orderBy(productsTable.name);
   res.json(rows.map(formatProduct));
 });
 
@@ -79,7 +82,10 @@ router.patch(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
-    const [existing] = await db.select().from(productsTable).where(eq(productsTable.id, params.data.id));
+    const [existing] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, params.data.id));
     if (!existing) {
       res.status(404).json({ error: "Product not found" });
       return;
@@ -160,7 +166,11 @@ router.delete(
     }
 
     // deactivate
-    const [row] = await db.update(productsTable).set({ isActive: false }).where(eq(productsTable.id, id)).returning();
+    const [row] = await db
+      .update(productsTable)
+      .set({ isActive: false })
+      .where(eq(productsTable.id, id))
+      .returning();
     if (!row) {
       res.status(404).json({ error: "Product not found" });
       return;
@@ -187,7 +197,10 @@ router.post(
       res.status(400).json({ error: params.error.message });
       return;
     }
-    const [existing] = await db.select().from(productsTable).where(eq(productsTable.id, params.data.id));
+    const [existing] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, params.data.id));
     if (!existing) {
       res.status(404).json({ error: "Product not found" });
       return;
