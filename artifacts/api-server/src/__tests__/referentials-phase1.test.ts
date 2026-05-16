@@ -148,6 +148,8 @@ vi.mock("@workspace/db", () => {
       code: "p.code",
       isActive: "p.isActive",
       description: "p.description",
+      dosage: "p.dosage",
+      pharmaceuticalForm: "p.pharmaceuticalForm",
       createdAt: "p.createdAt",
     },
     downtimeCategoriesTable: {
@@ -203,6 +205,10 @@ vi.mock("@workspace/db", () => {
     activityDowntimesTable: {
       id: "ad.id",
       categoryId: "ad.categoryId",
+    },
+    productPresentationsTable: {
+      id: "pp.id",
+      productId: "pp.productId",
     },
     roomsTable: {
       id: "r.id",
@@ -279,6 +285,8 @@ function pRow(overrides: Record<string, unknown> = {}) {
     name: "ProductA",
     code: "P-001",
     description: null,
+    dosage: null,
+    pharmaceuticalForm: null,
     isActive: true,
     createdAt: new Date("2024-01-01T00:00:00Z"),
     ...overrides,
@@ -679,6 +687,16 @@ describe("products routes — Phase 1 contract", () => {
   describe("PATCH /api/products/:id", () => {
     it("returns 409 on duplicate code", async () => {
       dbMock.pushResult([pRow()]);
+      // Phase 3: code change with historical=0 still runs the UPDATE; push 5
+      // zero entries so the immutability branch is skipped, then the UPDATE
+      // rejects with 23505.
+      pushDepCounts([
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: -1 },
+        { historical: 0, activeOpen: -1 },
+        { historical: 0, activeOpen: -1 },
+      ]);
       dbMock.pushReject(Object.assign(new Error("dup"), { code: "23505" }));
       const res = await request(app).patch(`/api/products/${P_ID}`).send({ code: "P-DUP" });
       expect(res.status).toBe(409);
@@ -690,11 +708,13 @@ describe("products routes — Phase 1 contract", () => {
   describe("DELETE /api/products/:id smart-delete decision tree", () => {
     it("hard-deletes (204) and audits action=delete when no deps", async () => {
       dbMock.pushResult([pRow()]);
-      // 4 rules for products: production_entries, cadences, kpi_daily (no
-      // activeOpen), kpi_monthly (no activeOpen).
+      // 5 rules for products: production_entries, cadences, kpi_daily (no
+      // activeOpen), kpi_monthly (no activeOpen), product_presentations (no
+      // activeOpen).
       pushDepCounts([
         { historical: 0, activeOpen: 0 },
         { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: -1 },
         { historical: 0, activeOpen: -1 },
         { historical: 0, activeOpen: -1 },
       ]);
@@ -721,6 +741,7 @@ describe("products routes — Phase 1 contract", () => {
         { historical: 0, activeOpen: 0 },
         { historical: 0, activeOpen: -1 },
         { historical: 0, activeOpen: -1 },
+        { historical: 0, activeOpen: -1 },
       ]);
       dbMock.pushResult([pRow({ isActive: false })]);
 
@@ -745,6 +766,7 @@ describe("products routes — Phase 1 contract", () => {
         { historical: 0, activeOpen: 0 },
         { historical: 0, activeOpen: -1 },
         { historical: 0, activeOpen: -1 },
+        { historical: 0, activeOpen: -1 },
       ]);
 
       const res = await request(app).delete(`/api/products/${P_ID}`);
@@ -760,6 +782,7 @@ describe("products routes — Phase 1 contract", () => {
       pushDepCounts([
         { historical: 0, activeOpen: 0 },
         { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: -1 },
         { historical: 0, activeOpen: -1 },
         { historical: 0, activeOpen: -1 },
       ]);
@@ -823,6 +846,122 @@ describe("products routes — Phase 1 contract", () => {
           newValues: expect.objectContaining({ isActive: true }),
         }),
       );
+    });
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// PRODUCTS — Phase 3 lifecycle additions (FEAT-001)
+// ──────────────────────────────────────────────────────────────────────────
+describe("products routes — Phase 3 lifecycle additions", () => {
+  describe("PATCH /api/products/:id code-immutability rule", () => {
+    it("returns 409 with the French immutability message when code changes AND historical > 0; no UPDATE, no audit", async () => {
+      dbMock.pushResult([pRow({ code: "P-001" })]); // SELECT existing
+      // countDependencies: push 5 rule entries with one historical>0 to flip
+      // the immutability branch.
+      pushDepCounts([
+        { historical: 3, activeOpen: 0 }, // production_entries — historical
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: -1 },
+        { historical: 0, activeOpen: -1 },
+        { historical: 0, activeOpen: -1 },
+      ]);
+
+      const res = await request(app).patch(`/api/products/${P_ID}`).send({ code: "NEW-CODE" });
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({
+        error:
+          "Le code est immuable: ce produit est référencé par des données historiques (production, présentations, KPI ou cadences).",
+      });
+      expect(dbMock.db.update).not.toHaveBeenCalled();
+      expect(writeAuditSpy).not.toHaveBeenCalled();
+    });
+
+    it("still UPDATEs when code changes AND historical = 0 (regression guard)", async () => {
+      dbMock.pushResult([pRow({ code: "P-001" })]); // SELECT existing
+      pushDepCounts([
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: -1 },
+        { historical: 0, activeOpen: -1 },
+        { historical: 0, activeOpen: -1 },
+      ]);
+      dbMock.pushResult([pRow({ code: "NEW-CODE" })]); // UPDATE returning
+
+      const res = await request(app).patch(`/api/products/${P_ID}`).send({ code: "NEW-CODE" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.code).toBe("NEW-CODE");
+      expect(dbMock.db.update).toHaveBeenCalledTimes(1);
+      expect(writeAuditSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tableName: "products",
+          action: "update",
+          recordId: P_ID,
+        }),
+      );
+    });
+
+    it("does NOT invoke countDependencies for non-code field updates even if historical would be > 0", async () => {
+      dbMock.pushResult([pRow({ code: "P-001" })]); // SELECT existing
+      dbMock.pushResult([pRow({ name: "NewName" })]); // UPDATE returning
+
+      const res = await request(app).patch(`/api/products/${P_ID}`).send({ name: "NewName" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.name).toBe("NewName");
+      expect(countDependenciesSpy).not.toHaveBeenCalled();
+      expect(dbMock.db.update).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("DELETE /api/products/:id product_presentations dependency", () => {
+    it("counts product_presentations as historical and takes the deactivate branch", async () => {
+      dbMock.pushResult([pRow()]); // SELECT existing
+      // No production_entries, no cadences, no kpi_daily, no kpi_monthly,
+      // but 5 product_presentations rows -> historical only -> deactivate.
+      pushDepCounts([
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: -1 },
+        { historical: 0, activeOpen: -1 },
+        { historical: 5, activeOpen: -1 }, // product_presentations
+      ]);
+      dbMock.pushResult([pRow({ isActive: false })]); // UPDATE returning
+
+      const res = await request(app).delete(`/api/products/${P_ID}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.isActive).toBe(false);
+      expect(writeAuditSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tableName: "products",
+          action: "deactivate",
+          recordId: P_ID,
+          oldValues: expect.objectContaining({ isActive: true }),
+          newValues: expect.objectContaining({ isActive: false }),
+        }),
+      );
+      expect(dbMock.db.update).toHaveBeenCalled();
+      expect(dbMock.db.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("POST /api/products dosage + pharmaceuticalForm projection", () => {
+    it("returns dosage and pharmaceuticalForm in the response body", async () => {
+      dbMock.pushResult([pRow({ dosage: "500mg", pharmaceuticalForm: "Comprimé pelliculé" })]); // INSERT returning
+
+      const res = await request(app).post("/api/products").send({
+        name: "ProductA",
+        code: "P-001",
+        dosage: "500mg",
+        pharmaceuticalForm: "Comprimé pelliculé",
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.dosage).toBe("500mg");
+      expect(res.body.pharmaceuticalForm).toBe("Comprimé pelliculé");
     });
   });
 });

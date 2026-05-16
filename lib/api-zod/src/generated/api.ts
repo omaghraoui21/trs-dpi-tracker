@@ -263,6 +263,8 @@ export const ListProductsResponseItem = zod.object({
   name: zod.string(),
   code: zod.string(),
   description: zod.string().nullish(),
+  dosage: zod.string().nullish(),
+  pharmaceuticalForm: zod.string().nullish(),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -275,6 +277,8 @@ export const CreateProductBody = zod.object({
   name: zod.string(),
   code: zod.string(),
   description: zod.string().optional(),
+  dosage: zod.string().optional(),
+  pharmaceuticalForm: zod.string().optional(),
 });
 
 /**
@@ -288,6 +292,8 @@ export const UpdateProductBody = zod.object({
   name: zod.string().optional(),
   code: zod.string().optional(),
   description: zod.string().optional(),
+  dosage: zod.string().optional(),
+  pharmaceuticalForm: zod.string().optional(),
   isActive: zod.boolean().optional(),
 });
 
@@ -296,6 +302,8 @@ export const UpdateProductResponse = zod.object({
   name: zod.string(),
   code: zod.string(),
   description: zod.string().nullish(),
+  dosage: zod.string().nullish(),
+  pharmaceuticalForm: zod.string().nullish(),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -312,6 +320,8 @@ export const DeleteProductResponse = zod.object({
   name: zod.string(),
   code: zod.string(),
   description: zod.string().nullish(),
+  dosage: zod.string().nullish(),
+  pharmaceuticalForm: zod.string().nullish(),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -328,6 +338,8 @@ export const ReactivateProductResponse = zod.object({
   name: zod.string(),
   code: zod.string(),
   description: zod.string().nullish(),
+  dosage: zod.string().nullish(),
+  pharmaceuticalForm: zod.string().nullish(),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
 });

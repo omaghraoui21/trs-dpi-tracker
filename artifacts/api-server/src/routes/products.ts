@@ -23,6 +23,8 @@ function formatProduct(p: typeof productsTable.$inferSelect) {
     name: p.name,
     code: p.code,
     description: p.description ?? null,
+    dosage: p.dosage ?? null,
+    pharmaceuticalForm: p.pharmaceuticalForm ?? null,
     isActive: p.isActive,
     createdAt: p.createdAt.toISOString(),
   };
@@ -89,6 +91,16 @@ router.patch(
     if (!existing) {
       res.status(404).json({ error: "Product not found" });
       return;
+    }
+    if (parsed.data.code !== undefined && parsed.data.code !== existing.code) {
+      const deps = await countDependencies("products", params.data.id);
+      if (deps.historical > 0) {
+        res.status(409).json({
+          error:
+            "Le code est immuable: ce produit est référencé par des données historiques (production, présentations, KPI ou cadences).",
+        });
+        return;
+      }
     }
     try {
       const [row] = await db

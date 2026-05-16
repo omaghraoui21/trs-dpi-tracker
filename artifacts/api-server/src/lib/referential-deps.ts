@@ -23,6 +23,7 @@ import {
   kpiMonthlyTable,
   cadencesTable,
   activityDowntimesTable,
+  productPresentationsTable,
 } from "@workspace/db";
 
 export type ReferentialKind = "equipments" | "products" | "downtime-categories";
@@ -118,6 +119,7 @@ function rulesFor(kind: ReferentialKind, id: string): TableRule[] {
       const cadRef = eq(cadencesTable.productId, id);
       const kpiDRef = eq(kpiDailyTable.productId, id);
       const kpiMRef = eq(kpiMonthlyTable.productId, id);
+      const ppRef = eq(productPresentationsTable.productId, id);
       return [
         {
           name: "production_entries",
@@ -141,6 +143,12 @@ function rulesFor(kind: ReferentialKind, id: string): TableRule[] {
           name: "kpi_monthly",
           table: kpiMonthlyTable,
           historical: kpiMRef,
+          activeOpen: null,
+        },
+        {
+          name: "product_presentations",
+          table: productPresentationsTable,
+          historical: ppRef,
           activeOpen: null,
         },
       ];

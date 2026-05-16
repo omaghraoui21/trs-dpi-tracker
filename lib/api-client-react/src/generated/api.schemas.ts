@@ -124,6 +124,10 @@ export interface Product {
   code: string;
   /** @nullable */
   description?: string | null;
+  /** @nullable */
+  dosage?: string | null;
+  /** @nullable */
+  pharmaceuticalForm?: string | null;
   isActive: boolean;
   createdAt: string;
 }
@@ -132,12 +136,16 @@ export interface CreateProductBody {
   name: string;
   code: string;
   description?: string;
+  dosage?: string;
+  pharmaceuticalForm?: string;
 }
 
 export interface UpdateProductBody {
   name?: string;
   code?: string;
   description?: string;
+  dosage?: string;
+  pharmaceuticalForm?: string;
   isActive?: boolean;
 }
 
