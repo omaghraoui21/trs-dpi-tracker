@@ -398,6 +398,8 @@ export const ListDowntimeCategoriesQueryParams = zod.object({
     .describe("Include inactive (soft-deleted) entries in the response."),
 });
 
+export const listDowntimeCategoriesResponseIsQuickShortcutDefault = false;
+
 export const ListDowntimeCategoriesResponseItem = zod.object({
   id: zod.string().uuid(),
   code: zod.string(),
@@ -412,9 +414,36 @@ export const ListDowntimeCategoriesResponseItem = zod.object({
   impactType: zod
     .enum(["tO", "tR", "tF", "tN", "tU", "TQ"])
     .describe("Which time dimension this category impacts"),
+  impactKpi: zod
+    .union([
+      zod.literal("TRS"),
+      zod.literal("TRG"),
+      zod.literal("TRE"),
+      zod.literal("DO"),
+      zod.literal("TP"),
+      zod.literal("TQ"),
+      zod.literal("PLANNING"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe(
+      "KPI dimension this category impacts (TRS \/ TRG \/ TRE \/ DO \/ TP \/ TQ \/ PLANNING)",
+    ),
   isPlanned: zod.boolean().describe("Whether this is a planned stop"),
   requiresComment: zod.boolean(),
   isActive: zod.boolean(),
+  isQuickShortcut: zod
+    .boolean()
+    .default(listDowntimeCategoriesResponseIsQuickShortcutDefault)
+    .describe(
+      "When true, render this category as a quick-action button in the operator entry screen",
+    ),
+  shortcutEquipments: zod
+    .string()
+    .nullish()
+    .describe(
+      "Comma-separated list of equipment codes (free-form, nullable). Empty\/null means the shortcut applies to all equipments.",
+    ),
 });
 export const ListDowntimeCategoriesResponse = zod.array(ListDowntimeCategoriesResponseItem);
 
@@ -427,8 +456,35 @@ export const CreateDowntimeCategoryBody = zod.object({
   description: zod.string().optional(),
   famille: zod.string().optional().describe("Family grouping for this stop category"),
   impactType: zod.enum(["tO", "tR", "tF", "tN", "tU", "TQ"]),
+  impactKpi: zod
+    .union([
+      zod.literal("TRS"),
+      zod.literal("TRG"),
+      zod.literal("TRE"),
+      zod.literal("DO"),
+      zod.literal("TP"),
+      zod.literal("TQ"),
+      zod.literal("PLANNING"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe(
+      "KPI dimension this category impacts (TRS \/ TRG \/ TRE \/ DO \/ TP \/ TQ \/ PLANNING)",
+    ),
   isPlanned: zod.boolean(),
   requiresComment: zod.boolean(),
+  isQuickShortcut: zod
+    .boolean()
+    .optional()
+    .describe(
+      "When true, render this category as a quick-action button in the operator entry screen",
+    ),
+  shortcutEquipments: zod
+    .string()
+    .nullish()
+    .describe(
+      "Comma-separated list of equipment codes (free-form, nullable). Empty\/null means the shortcut applies to all equipments.",
+    ),
 });
 
 /**
@@ -444,10 +500,39 @@ export const UpdateDowntimeCategoryBody = zod.object({
   description: zod.string().optional(),
   famille: zod.string().optional().describe("Family grouping for this stop category"),
   impactType: zod.enum(["tO", "tR", "tF", "tN", "tU", "TQ"]).optional(),
+  impactKpi: zod
+    .union([
+      zod.literal("TRS"),
+      zod.literal("TRG"),
+      zod.literal("TRE"),
+      zod.literal("DO"),
+      zod.literal("TP"),
+      zod.literal("TQ"),
+      zod.literal("PLANNING"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe(
+      "KPI dimension this category impacts (TRS \/ TRG \/ TRE \/ DO \/ TP \/ TQ \/ PLANNING)",
+    ),
   isPlanned: zod.boolean().optional(),
   requiresComment: zod.boolean().optional(),
   isActive: zod.boolean().optional(),
+  isQuickShortcut: zod
+    .boolean()
+    .optional()
+    .describe(
+      "When true, render this category as a quick-action button in the operator entry screen",
+    ),
+  shortcutEquipments: zod
+    .string()
+    .nullish()
+    .describe(
+      "Comma-separated list of equipment codes (free-form, nullable). Empty\/null means the shortcut applies to all equipments.",
+    ),
 });
+
+export const updateDowntimeCategoryResponseIsQuickShortcutDefault = false;
 
 export const UpdateDowntimeCategoryResponse = zod.object({
   id: zod.string().uuid(),
@@ -463,9 +548,36 @@ export const UpdateDowntimeCategoryResponse = zod.object({
   impactType: zod
     .enum(["tO", "tR", "tF", "tN", "tU", "TQ"])
     .describe("Which time dimension this category impacts"),
+  impactKpi: zod
+    .union([
+      zod.literal("TRS"),
+      zod.literal("TRG"),
+      zod.literal("TRE"),
+      zod.literal("DO"),
+      zod.literal("TP"),
+      zod.literal("TQ"),
+      zod.literal("PLANNING"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe(
+      "KPI dimension this category impacts (TRS \/ TRG \/ TRE \/ DO \/ TP \/ TQ \/ PLANNING)",
+    ),
   isPlanned: zod.boolean().describe("Whether this is a planned stop"),
   requiresComment: zod.boolean(),
   isActive: zod.boolean(),
+  isQuickShortcut: zod
+    .boolean()
+    .default(updateDowntimeCategoryResponseIsQuickShortcutDefault)
+    .describe(
+      "When true, render this category as a quick-action button in the operator entry screen",
+    ),
+  shortcutEquipments: zod
+    .string()
+    .nullish()
+    .describe(
+      "Comma-separated list of equipment codes (free-form, nullable). Empty\/null means the shortcut applies to all equipments.",
+    ),
 });
 
 /**
@@ -474,6 +586,8 @@ export const UpdateDowntimeCategoryResponse = zod.object({
 export const DeleteDowntimeCategoryParams = zod.object({
   id: zod.coerce.string().uuid(),
 });
+
+export const deleteDowntimeCategoryResponseIsQuickShortcutDefault = false;
 
 export const DeleteDowntimeCategoryResponse = zod.object({
   id: zod.string().uuid(),
@@ -489,9 +603,36 @@ export const DeleteDowntimeCategoryResponse = zod.object({
   impactType: zod
     .enum(["tO", "tR", "tF", "tN", "tU", "TQ"])
     .describe("Which time dimension this category impacts"),
+  impactKpi: zod
+    .union([
+      zod.literal("TRS"),
+      zod.literal("TRG"),
+      zod.literal("TRE"),
+      zod.literal("DO"),
+      zod.literal("TP"),
+      zod.literal("TQ"),
+      zod.literal("PLANNING"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe(
+      "KPI dimension this category impacts (TRS \/ TRG \/ TRE \/ DO \/ TP \/ TQ \/ PLANNING)",
+    ),
   isPlanned: zod.boolean().describe("Whether this is a planned stop"),
   requiresComment: zod.boolean(),
   isActive: zod.boolean(),
+  isQuickShortcut: zod
+    .boolean()
+    .default(deleteDowntimeCategoryResponseIsQuickShortcutDefault)
+    .describe(
+      "When true, render this category as a quick-action button in the operator entry screen",
+    ),
+  shortcutEquipments: zod
+    .string()
+    .nullish()
+    .describe(
+      "Comma-separated list of equipment codes (free-form, nullable). Empty\/null means the shortcut applies to all equipments.",
+    ),
 });
 
 /**
@@ -500,6 +641,8 @@ export const DeleteDowntimeCategoryResponse = zod.object({
 export const ReactivateDowntimeCategoryParams = zod.object({
   id: zod.coerce.string().uuid(),
 });
+
+export const reactivateDowntimeCategoryResponseIsQuickShortcutDefault = false;
 
 export const ReactivateDowntimeCategoryResponse = zod.object({
   id: zod.string().uuid(),
@@ -515,9 +658,36 @@ export const ReactivateDowntimeCategoryResponse = zod.object({
   impactType: zod
     .enum(["tO", "tR", "tF", "tN", "tU", "TQ"])
     .describe("Which time dimension this category impacts"),
+  impactKpi: zod
+    .union([
+      zod.literal("TRS"),
+      zod.literal("TRG"),
+      zod.literal("TRE"),
+      zod.literal("DO"),
+      zod.literal("TP"),
+      zod.literal("TQ"),
+      zod.literal("PLANNING"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe(
+      "KPI dimension this category impacts (TRS \/ TRG \/ TRE \/ DO \/ TP \/ TQ \/ PLANNING)",
+    ),
   isPlanned: zod.boolean().describe("Whether this is a planned stop"),
   requiresComment: zod.boolean(),
   isActive: zod.boolean(),
+  isQuickShortcut: zod
+    .boolean()
+    .default(reactivateDowntimeCategoryResponseIsQuickShortcutDefault)
+    .describe(
+      "When true, render this category as a quick-action button in the operator entry screen",
+    ),
+  shortcutEquipments: zod
+    .string()
+    .nullish()
+    .describe(
+      "Comma-separated list of equipment codes (free-form, nullable). Empty\/null means the shortcut applies to all equipments.",
+    ),
 });
 
 /**

@@ -25,6 +25,7 @@ function formatCategory(c: typeof downtimeCategoriesTable.$inferSelect) {
     description: c.description ?? null,
     famille: c.famille ?? null,
     impactType: c.impactType,
+    impactKpi: c.impactKpi ?? null,
     isPlanned: c.isPlanned,
     requiresComment: c.requiresComment,
     isActive: c.isActive,
@@ -54,24 +55,15 @@ router.get(
 router.post(
   "/downtime-categories",
   requireAuth,
-  requireRole("admin", "supervisor"),
+  requireRole("admin"),
   asyncHandler(async (req, res) => {
-    const { isQuickShortcut, shortcutEquipments, ...bodyRest } = req.body as {
-      isQuickShortcut?: boolean;
-      shortcutEquipments?: string | null;
-      [k: string]: unknown;
-    };
-    const parsed = CreateDowntimeCategoryBody.safeParse(bodyRest);
+    const parsed = CreateDowntimeCategoryBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.message });
       return;
     }
-    const insertData: typeof downtimeCategoriesTable.$inferInsert = { ...parsed.data };
-    if (typeof isQuickShortcut === "boolean") insertData.isQuickShortcut = isQuickShortcut;
-    if (shortcutEquipments !== undefined)
-      insertData.shortcutEquipments = shortcutEquipments ?? null;
     try {
-      const [row] = await db.insert(downtimeCategoriesTable).values(insertData).returning();
+      const [row] = await db.insert(downtimeCategoriesTable).values(parsed.data).returning();
       writeAudit({
         userId: req.user!.id,
         tableName: "downtime_categories",
@@ -94,19 +86,14 @@ router.post(
 router.patch(
   "/downtime-categories/:id",
   requireAuth,
-  requireRole("admin", "supervisor"),
+  requireRole("admin"),
   asyncHandler(async (req, res) => {
     const params = UpdateDowntimeCategoryParams.safeParse(req.params);
     if (!params.success) {
       res.status(400).json({ error: params.error.message });
       return;
     }
-    const { isQuickShortcut, shortcutEquipments, ...bodyRest } = req.body as {
-      isQuickShortcut?: boolean;
-      shortcutEquipments?: string | null;
-      [k: string]: unknown;
-    };
-    const parsed = UpdateDowntimeCategoryBody.safeParse(bodyRest);
+    const parsed = UpdateDowntimeCategoryBody.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.message });
       return;
@@ -119,14 +106,20 @@ router.patch(
       res.status(404).json({ error: "Category not found" });
       return;
     }
-    const updateData: Partial<typeof downtimeCategoriesTable.$inferInsert> = { ...parsed.data };
-    if (typeof isQuickShortcut === "boolean") updateData.isQuickShortcut = isQuickShortcut;
-    if (shortcutEquipments !== undefined)
-      updateData.shortcutEquipments = shortcutEquipments ?? null;
+    if (parsed.data.code !== undefined && parsed.data.code !== existing.code) {
+      const deps = await countDependencies("downtime-categories", params.data.id);
+      if (deps.historical > 0) {
+        res.status(409).json({
+          error:
+            "Le code est immuable: cette catégorie est référencée par des données historiques (événements d'arrêt ou activités).",
+        });
+        return;
+      }
+    }
     try {
       const [row] = await db
         .update(downtimeCategoriesTable)
-        .set(updateData)
+        .set(parsed.data)
         .where(eq(downtimeCategoriesTable.id, params.data.id))
         .returning();
       if (!row) {
