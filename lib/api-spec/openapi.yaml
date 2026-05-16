@@ -192,6 +192,14 @@ paths:
       operationId: listEquipments
       tags: [equipments]
       summary: List all equipments
+      parameters:
+        - name: includeInactive
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Include inactive (soft-deleted) entries in the response.
       responses:
         "200":
           description: List of equipments
@@ -218,6 +226,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Equipment"
+        "409":
+          description: Duplicate code (unique constraint violation)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConflictError"
 
   /equipments/{id}:
     patch:
@@ -244,6 +258,62 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Equipment"
+        "409":
+          description: Duplicate code (unique constraint violation)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConflictError"
+    delete:
+      operationId: deleteEquipment
+      tags: [equipments]
+      summary: Delete or deactivate an equipment depending on dependencies
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Hard-deleted (no dependencies existed)
+        "200":
+          description: Deactivated (historical dependencies exist) returns the deactivated row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Equipment"
+        "409":
+          description: Deletion blocked active/open dependencies prevent deactivation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConflictError"
+        "404":
+          description: Resource not found
+
+  /equipments/{id}/reactivate:
+    post:
+      operationId: reactivateEquipment
+      tags: [equipments]
+      summary: Reactivate a previously deactivated equipment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Reactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Equipment"
+        "404":
+          description: Resource not found
 
   # Products
   /products:
@@ -251,6 +321,14 @@ paths:
       operationId: listProducts
       tags: [products]
       summary: List all products
+      parameters:
+        - name: includeInactive
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Include inactive (soft-deleted) entries in the response.
       responses:
         "200":
           description: List of products
@@ -277,6 +355,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Product"
+        "409":
+          description: Duplicate code (unique constraint violation)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConflictError"
 
   /products/{id}:
     patch:
@@ -303,6 +387,62 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Product"
+        "409":
+          description: Duplicate code (unique constraint violation)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConflictError"
+    delete:
+      operationId: deleteProduct
+      tags: [products]
+      summary: Delete or deactivate a product depending on dependencies
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Hard-deleted (no dependencies existed)
+        "200":
+          description: Deactivated (historical dependencies exist) returns the deactivated row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "409":
+          description: Deletion blocked active/open dependencies prevent deactivation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConflictError"
+        "404":
+          description: Resource not found
+
+  /products/{id}/reactivate:
+    post:
+      operationId: reactivateProduct
+      tags: [products]
+      summary: Reactivate a previously deactivated product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Reactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        "404":
+          description: Resource not found
 
   # Cadences
   /cadences:
@@ -354,6 +494,14 @@ paths:
       operationId: listDowntimeCategories
       tags: [downtime-categories]
       summary: List all downtime categories
+      parameters:
+        - name: includeInactive
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Include inactive (soft-deleted) entries in the response.
       responses:
         "200":
           description: List of downtime categories
@@ -380,6 +528,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DowntimeCategory"
+        "409":
+          description: Duplicate code (unique constraint violation)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConflictError"
 
   /downtime-categories/{id}:
     patch:
@@ -406,6 +560,62 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DowntimeCategory"
+        "409":
+          description: Duplicate code (unique constraint violation)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConflictError"
+    delete:
+      operationId: deleteDowntimeCategory
+      tags: [downtime-categories]
+      summary: Delete or deactivate a downtime category depending on dependencies
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Hard-deleted (no dependencies existed)
+        "200":
+          description: Deactivated (historical dependencies exist) returns the deactivated row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DowntimeCategory"
+        "409":
+          description: Deletion blocked active/open dependencies prevent deactivation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConflictError"
+        "404":
+          description: Resource not found
+
+  /downtime-categories/{id}/reactivate:
+    post:
+      operationId: reactivateDowntimeCategory
+      tags: [downtime-categories]
+      summary: Reactivate a previously deactivated downtime category
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Reactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DowntimeCategory"
+        "404":
+          description: Resource not found
 
   # Production entries
   /production-entries:
@@ -1094,6 +1304,15 @@ components:
           type: string
       required:
         - status
+
+    # Shared 409 error body for referential routes (smart-delete blocks and duplicate-code POST/PATCH).
+    ConflictError:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Human-readable French message describing the conflict.
+      required: [error]
 
     # Auth
     LoginBody:

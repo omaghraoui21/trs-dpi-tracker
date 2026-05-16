@@ -6,6 +6,7 @@
     "codegen": "orval --config ./orval.config.ts && pnpm -w run typecheck:libs"
   },
   "devDependencies": {
-    "orval": "^8.5.2"
-  }
+    "orval": "8.5.3"
+  },
+  "_orvalPinRationale": "orval is pinned to 8.5.3: 8.9.x changes generated output formatting and drops the hand-applied PasswordSchema wrapper in lib/api-zod; keep this pin in sync with codegen reviews until orval upstream is investigated."
 }

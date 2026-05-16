@@ -15,7 +15,7 @@ export interface AuditParams {
   userId: string | null | undefined;
   tableName: string;
   recordId: string;
-  action: "create" | "update" | "delete" | "login" | "reset_password" | "validate" | "reject" | "submit";
+  action: "create" | "update" | "delete" | "deactivate" | "reactivate" | "login" | "reset_password" | "validate" | "reject" | "submit";
   oldValues?: Record<string, unknown> | null;
   newValues?: Record<string, unknown> | null;
   reason?: string | null;

@@ -2,11 +2,15 @@ import { Router, IRouter } from "express";
 import { db, productsTable, cadencesTable, equipmentsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
-import { isUniqueViolation } from "../lib/db-errors";
+import { mapDbError, isForeignKeyViolation } from "../lib/db-errors";
+import { countDependencies } from "../lib/referential-deps";
+import { decideDeleteAction } from "../lib/smart-delete";
+import { writeAudit } from "../lib/audit";
 import {
   CreateProductBody,
   UpdateProductBody,
   UpdateProductParams,
+  ListProductsQueryParams,
   ListCadencesQueryParams,
   UpsertCadenceBody,
 } from "@workspace/api-zod";
@@ -24,8 +28,16 @@ function formatProduct(p: typeof productsTable.$inferSelect) {
   };
 }
 
-router.get("/products", requireAuth, async (_req, res): Promise<void> => {
-  const rows = await db.select().from(productsTable).orderBy(productsTable.name);
+router.get("/products", requireAuth, async (req, res): Promise<void> => {
+  const q = ListProductsQueryParams.safeParse(req.query);
+  const includeInactive = q.success ? q.data.includeInactive === true : false;
+  const rows = includeInactive
+    ? await db.select().from(productsTable).orderBy(productsTable.name)
+    : await db
+        .select()
+        .from(productsTable)
+        .where(eq(productsTable.isActive, true))
+        .orderBy(productsTable.name);
   res.json(rows.map(formatProduct));
 });
 
@@ -37,10 +49,18 @@ router.post("/products", requireAuth, requireRole("admin"), async (req, res): Pr
   }
   try {
     const [row] = await db.insert(productsTable).values(parsed.data).returning();
+    writeAudit({
+      userId: req.user!.id,
+      tableName: "products",
+      recordId: row.id,
+      action: "create",
+      newValues: row as Record<string, unknown>,
+    });
     res.status(201).json(formatProduct(row));
   } catch (err) {
-    if (isUniqueViolation(err)) {
-      res.status(409).json({ error: "Un produit avec ce code existe déjà" });
+    const mapped = mapDbError(err);
+    if (mapped) {
+      res.status(mapped.status).json(mapped.body);
       return;
     }
     throw err;
@@ -62,16 +82,41 @@ router.patch(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
-    const [row] = await db
-      .update(productsTable)
-      .set(parsed.data)
-      .where(eq(productsTable.id, params.data.id))
-      .returning();
-    if (!row) {
+    const [existing] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, params.data.id));
+    if (!existing) {
       res.status(404).json({ error: "Product not found" });
       return;
     }
-    res.json(formatProduct(row));
+    try {
+      const [row] = await db
+        .update(productsTable)
+        .set(parsed.data)
+        .where(eq(productsTable.id, params.data.id))
+        .returning();
+      if (!row) {
+        res.status(404).json({ error: "Product not found" });
+        return;
+      }
+      writeAudit({
+        userId: req.user!.id,
+        tableName: "products",
+        recordId: row.id,
+        action: "update",
+        oldValues: existing as Record<string, unknown>,
+        newValues: row as Record<string, unknown>,
+      });
+      res.json(formatProduct(row));
+    } catch (err) {
+      const mapped = mapDbError(err);
+      if (mapped) {
+        res.status(mapped.status).json(mapped.body);
+        return;
+      }
+      throw err;
+    }
   },
 );
 
@@ -85,6 +130,47 @@ router.delete(
       res.status(400).json({ error: "ID requis" });
       return;
     }
+    const [existing] = await db.select().from(productsTable).where(eq(productsTable.id, id));
+    if (!existing) {
+      res.status(404).json({ error: "Product not found" });
+      return;
+    }
+
+    if (existing.isActive === false) {
+      res.status(200).json(formatProduct(existing));
+      return;
+    }
+
+    const deps = await countDependencies("products", id);
+    const decision = decideDeleteAction(deps);
+
+    if (decision.kind === "block") {
+      res.status(409).json({ error: decision.reason });
+      return;
+    }
+
+    if (decision.kind === "hard_delete") {
+      try {
+        await db.delete(productsTable).where(eq(productsTable.id, id));
+      } catch (err) {
+        if (isForeignKeyViolation(err)) {
+          res.status(409).json({ error: "Suppression impossible: dépendance détectée." });
+          return;
+        }
+        throw err;
+      }
+      writeAudit({
+        userId: req.user!.id,
+        tableName: "products",
+        recordId: id,
+        action: "delete",
+        oldValues: existing as Record<string, unknown>,
+      });
+      res.sendStatus(204);
+      return;
+    }
+
+    // deactivate
     const [row] = await db
       .update(productsTable)
       .set({ isActive: false })
@@ -94,7 +180,54 @@ router.delete(
       res.status(404).json({ error: "Product not found" });
       return;
     }
-    res.sendStatus(204);
+    writeAudit({
+      userId: req.user!.id,
+      tableName: "products",
+      recordId: row.id,
+      action: "deactivate",
+      oldValues: existing as Record<string, unknown>,
+      newValues: row as Record<string, unknown>,
+    });
+    res.status(200).json(formatProduct(row));
+  },
+);
+
+router.post(
+  "/products/:id/reactivate",
+  requireAuth,
+  requireRole("admin"),
+  async (req, res): Promise<void> => {
+    const params = UpdateProductParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [existing] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, params.data.id));
+    if (!existing) {
+      res.status(404).json({ error: "Product not found" });
+      return;
+    }
+    if (existing.isActive === true) {
+      res.status(200).json(formatProduct(existing));
+      return;
+    }
+    const [row] = await db
+      .update(productsTable)
+      .set({ isActive: true })
+      .where(eq(productsTable.id, params.data.id))
+      .returning();
+    writeAudit({
+      userId: req.user!.id,
+      tableName: "products",
+      recordId: row.id,
+      action: "reactivate",
+      oldValues: existing as Record<string, unknown>,
+      newValues: row as Record<string, unknown>,
+    });
+    res.status(200).json(formatProduct(row));
   },
 );
 
