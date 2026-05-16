@@ -17,12 +17,9 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Login with email and password
  */
-// Password must be at least 12 characters — enforced on login and all user mutations.
-const PasswordSchema = zod.string().min(12, "Le mot de passe doit contenir au moins 12 caractères");
-
 export const LoginBody = zod.object({
   email: zod.string(),
-  password: zod.string(), // login: no min-length — existing accounts may pre-date the policy
+  password: zod.string(),
 });
 
 export const LoginResponse = zod.object({
@@ -69,7 +66,7 @@ export const ListUsersResponse = zod.array(ListUsersResponseItem);
  */
 export const CreateUserBody = zod.object({
   email: zod.string(),
-  password: PasswordSchema,
+  password: zod.string(),
   firstName: zod.string(),
   lastName: zod.string(),
   role: zod.enum(["operator", "supervisor", "admin"]),
@@ -105,7 +102,7 @@ export const UpdateUserBody = zod.object({
   lastName: zod.string().optional(),
   role: zod.enum(["operator", "supervisor", "admin"]).optional(),
   isActive: zod.boolean().optional(),
-  password: PasswordSchema.optional(),
+  password: zod.string().optional(),
 });
 
 export const UpdateUserResponse = zod.object({

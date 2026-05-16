@@ -18,6 +18,7 @@ import type {
 
 import type {
   Cadence,
+  ConflictError,
   CreateDowntimeCategoryBody,
   CreateDowntimeEventBody,
   CreateEquipmentBody,
@@ -61,7 +62,6 @@ import type {
   PlanWeekSummary,
   Product,
   ProductionEntryWithDetails,
-  ReferentialDeleteBlocked,
   UpdateDowntimeCategoryBody,
   UpdateDowntimeEventBody,
   UpdateEquipmentBody,
@@ -779,7 +779,7 @@ export const createEquipment = async (
 };
 
 export const getCreateEquipmentMutationOptions = <
-  TError = ErrorType<ReferentialDeleteBlocked>,
+  TError = ErrorType<ConflictError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -818,13 +818,13 @@ export type CreateEquipmentMutationResult = NonNullable<
   Awaited<ReturnType<typeof createEquipment>>
 >;
 export type CreateEquipmentMutationBody = BodyType<CreateEquipmentBody>;
-export type CreateEquipmentMutationError = ErrorType<ReferentialDeleteBlocked>;
+export type CreateEquipmentMutationError = ErrorType<ConflictError>;
 
 /**
  * @summary Create equipment
  */
 export const useCreateEquipment = <
-  TError = ErrorType<ReferentialDeleteBlocked>,
+  TError = ErrorType<ConflictError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -864,7 +864,7 @@ export const updateEquipment = async (
 };
 
 export const getUpdateEquipmentMutationOptions = <
-  TError = ErrorType<ReferentialDeleteBlocked>,
+  TError = ErrorType<ConflictError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -903,13 +903,13 @@ export type UpdateEquipmentMutationResult = NonNullable<
   Awaited<ReturnType<typeof updateEquipment>>
 >;
 export type UpdateEquipmentMutationBody = BodyType<UpdateEquipmentBody>;
-export type UpdateEquipmentMutationError = ErrorType<ReferentialDeleteBlocked>;
+export type UpdateEquipmentMutationError = ErrorType<ConflictError>;
 
 /**
  * @summary Update equipment
  */
 export const useUpdateEquipment = <
-  TError = ErrorType<ReferentialDeleteBlocked>,
+  TError = ErrorType<ConflictError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -946,7 +946,7 @@ export const deleteEquipment = async (
 };
 
 export const getDeleteEquipmentMutationOptions = <
-  TError = ErrorType<void | ReferentialDeleteBlocked>,
+  TError = ErrorType<void | ConflictError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -985,13 +985,13 @@ export type DeleteEquipmentMutationResult = NonNullable<
   Awaited<ReturnType<typeof deleteEquipment>>
 >;
 
-export type DeleteEquipmentMutationError = ErrorType<void | ReferentialDeleteBlocked>;
+export type DeleteEquipmentMutationError = ErrorType<void | ConflictError>;
 
 /**
  * @summary Delete or deactivate an equipment depending on dependencies
  */
 export const useDeleteEquipment = <
-  TError = ErrorType<void | ReferentialDeleteBlocked>,
+  TError = ErrorType<void | ConflictError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -1188,7 +1188,7 @@ export const createProduct = async (
 };
 
 export const getCreateProductMutationOptions = <
-  TError = ErrorType<ReferentialDeleteBlocked>,
+  TError = ErrorType<ConflictError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -1225,15 +1225,12 @@ export const getCreateProductMutationOptions = <
 
 export type CreateProductMutationResult = NonNullable<Awaited<ReturnType<typeof createProduct>>>;
 export type CreateProductMutationBody = BodyType<CreateProductBody>;
-export type CreateProductMutationError = ErrorType<ReferentialDeleteBlocked>;
+export type CreateProductMutationError = ErrorType<ConflictError>;
 
 /**
  * @summary Create product
  */
-export const useCreateProduct = <
-  TError = ErrorType<ReferentialDeleteBlocked>,
-  TContext = unknown,
->(options?: {
+export const useCreateProduct = <TError = ErrorType<ConflictError>, TContext = unknown>(options?: {
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof createProduct>>,
     TError,
@@ -1271,7 +1268,7 @@ export const updateProduct = async (
 };
 
 export const getUpdateProductMutationOptions = <
-  TError = ErrorType<ReferentialDeleteBlocked>,
+  TError = ErrorType<ConflictError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -1308,15 +1305,12 @@ export const getUpdateProductMutationOptions = <
 
 export type UpdateProductMutationResult = NonNullable<Awaited<ReturnType<typeof updateProduct>>>;
 export type UpdateProductMutationBody = BodyType<UpdateProductBody>;
-export type UpdateProductMutationError = ErrorType<ReferentialDeleteBlocked>;
+export type UpdateProductMutationError = ErrorType<ConflictError>;
 
 /**
  * @summary Update product
  */
-export const useUpdateProduct = <
-  TError = ErrorType<ReferentialDeleteBlocked>,
-  TContext = unknown,
->(options?: {
+export const useUpdateProduct = <TError = ErrorType<ConflictError>, TContext = unknown>(options?: {
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof updateProduct>>,
     TError,
@@ -1348,7 +1342,7 @@ export const deleteProduct = async (id: string, options?: RequestInit): Promise<
 };
 
 export const getDeleteProductMutationOptions = <
-  TError = ErrorType<void | ReferentialDeleteBlocked>,
+  TError = ErrorType<void | ConflictError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -1384,13 +1378,13 @@ export const getDeleteProductMutationOptions = <
 
 export type DeleteProductMutationResult = NonNullable<Awaited<ReturnType<typeof deleteProduct>>>;
 
-export type DeleteProductMutationError = ErrorType<void | ReferentialDeleteBlocked>;
+export type DeleteProductMutationError = ErrorType<void | ConflictError>;
 
 /**
  * @summary Delete or deactivate a product depending on dependencies
  */
 export const useDeleteProduct = <
-  TError = ErrorType<void | ReferentialDeleteBlocked>,
+  TError = ErrorType<void | ConflictError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -1746,7 +1740,7 @@ export const createDowntimeCategory = async (
 };
 
 export const getCreateDowntimeCategoryMutationOptions = <
-  TError = ErrorType<ReferentialDeleteBlocked>,
+  TError = ErrorType<ConflictError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -1785,13 +1779,13 @@ export type CreateDowntimeCategoryMutationResult = NonNullable<
   Awaited<ReturnType<typeof createDowntimeCategory>>
 >;
 export type CreateDowntimeCategoryMutationBody = BodyType<CreateDowntimeCategoryBody>;
-export type CreateDowntimeCategoryMutationError = ErrorType<ReferentialDeleteBlocked>;
+export type CreateDowntimeCategoryMutationError = ErrorType<ConflictError>;
 
 /**
  * @summary Create a downtime category
  */
 export const useCreateDowntimeCategory = <
-  TError = ErrorType<ReferentialDeleteBlocked>,
+  TError = ErrorType<ConflictError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -1831,7 +1825,7 @@ export const updateDowntimeCategory = async (
 };
 
 export const getUpdateDowntimeCategoryMutationOptions = <
-  TError = ErrorType<ReferentialDeleteBlocked>,
+  TError = ErrorType<ConflictError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -1870,13 +1864,13 @@ export type UpdateDowntimeCategoryMutationResult = NonNullable<
   Awaited<ReturnType<typeof updateDowntimeCategory>>
 >;
 export type UpdateDowntimeCategoryMutationBody = BodyType<UpdateDowntimeCategoryBody>;
-export type UpdateDowntimeCategoryMutationError = ErrorType<ReferentialDeleteBlocked>;
+export type UpdateDowntimeCategoryMutationError = ErrorType<ConflictError>;
 
 /**
  * @summary Update a downtime category
  */
 export const useUpdateDowntimeCategory = <
-  TError = ErrorType<ReferentialDeleteBlocked>,
+  TError = ErrorType<ConflictError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -1913,7 +1907,7 @@ export const deleteDowntimeCategory = async (
 };
 
 export const getDeleteDowntimeCategoryMutationOptions = <
-  TError = ErrorType<void | ReferentialDeleteBlocked>,
+  TError = ErrorType<void | ConflictError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -1952,13 +1946,13 @@ export type DeleteDowntimeCategoryMutationResult = NonNullable<
   Awaited<ReturnType<typeof deleteDowntimeCategory>>
 >;
 
-export type DeleteDowntimeCategoryMutationError = ErrorType<void | ReferentialDeleteBlocked>;
+export type DeleteDowntimeCategoryMutationError = ErrorType<void | ConflictError>;
 
 /**
  * @summary Delete or deactivate a downtime category depending on dependencies
  */
 export const useDeleteDowntimeCategory = <
-  TError = ErrorType<void | ReferentialDeleteBlocked>,
+  TError = ErrorType<void | ConflictError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<

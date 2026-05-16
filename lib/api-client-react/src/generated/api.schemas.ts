@@ -9,8 +9,8 @@ export interface HealthStatus {
   status: string;
 }
 
-export interface ReferentialDeleteBlocked {
-  /** Human-readable French message listing the offending dependent tables and counts. */
+export interface ConflictError {
+  /** Human-readable French message describing the conflict. */
   error: string;
 }
 

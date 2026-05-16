@@ -231,7 +231,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ReferentialDeleteBlocked"
+                $ref: "#/components/schemas/ConflictError"
 
   /equipments/{id}:
     patch:
@@ -263,7 +263,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ReferentialDeleteBlocked"
+                $ref: "#/components/schemas/ConflictError"
     delete:
       operationId: deleteEquipment
       tags: [equipments]
@@ -289,7 +289,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ReferentialDeleteBlocked"
+                $ref: "#/components/schemas/ConflictError"
         "404":
           description: Resource not found
 
@@ -360,7 +360,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ReferentialDeleteBlocked"
+                $ref: "#/components/schemas/ConflictError"
 
   /products/{id}:
     patch:
@@ -392,7 +392,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ReferentialDeleteBlocked"
+                $ref: "#/components/schemas/ConflictError"
     delete:
       operationId: deleteProduct
       tags: [products]
@@ -418,7 +418,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ReferentialDeleteBlocked"
+                $ref: "#/components/schemas/ConflictError"
         "404":
           description: Resource not found
 
@@ -533,7 +533,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ReferentialDeleteBlocked"
+                $ref: "#/components/schemas/ConflictError"
 
   /downtime-categories/{id}:
     patch:
@@ -565,7 +565,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ReferentialDeleteBlocked"
+                $ref: "#/components/schemas/ConflictError"
     delete:
       operationId: deleteDowntimeCategory
       tags: [downtime-categories]
@@ -591,7 +591,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ReferentialDeleteBlocked"
+                $ref: "#/components/schemas/ConflictError"
         "404":
           description: Resource not found
 
@@ -1305,13 +1305,13 @@ components:
       required:
         - status
 
-    # Shared error schema for referential delete decisions and unique-constraint violations.
-    ReferentialDeleteBlocked:
+    # Shared 409 error body for referential routes (smart-delete blocks and duplicate-code POST/PATCH).
+    ConflictError:
       type: object
       properties:
         error:
           type: string
-          description: Human-readable French message listing the offending dependent tables and counts.
+          description: Human-readable French message describing the conflict.
       required: [error]
 
     # Auth
@@ -1706,24 +1706,7 @@ components:
         updatedAt:
           type: string
           format: date-time
-      required:
-        [
-          id,
-          date,
-          equipmentId,
-          productId,
-          batchNumber,
-          shift,
-          shiftStart,
-          shiftEnd,
-          quantityProduced,
-          quantityConforming,
-          quantityRejected,
-          status,
-          operatorId,
-          createdAt,
-          updatedAt,
-        ]
+      required: [id, date, equipmentId, productId, batchNumber, shift, shiftStart, shiftEnd, quantityProduced, quantityConforming, quantityRejected, status, operatorId, createdAt, updatedAt]
 
     ProductionEntryWithDetails:
       allOf:
@@ -1769,19 +1752,7 @@ components:
           type: integer
         quantityRejected:
           type: integer
-      required:
-        [
-          date,
-          equipmentId,
-          productId,
-          batchNumber,
-          shift,
-          shiftStart,
-          shiftEnd,
-          quantityProduced,
-          quantityConforming,
-          quantityRejected,
-        ]
+      required: [date, equipmentId, productId, batchNumber, shift, shiftStart, shiftEnd, quantityProduced, quantityConforming, quantityRejected]
 
     UpdateProductionEntryBody:
       type: object
@@ -1867,24 +1838,7 @@ components:
         cadenceGap:
           type: number
           description: Gap between validated and actual cadence
-      required:
-        [
-          tT,
-          tO,
-          tR,
-          tF,
-          tN,
-          tU,
-          DO,
-          TP,
-          TQ,
-          TRS,
-          TRG,
-          TRE,
-          plannedDowntimeMinutes,
-          unplannedDowntimeMinutes,
-          cadenceGap,
-        ]
+      required: [tT, tO, tR, tF, tN, tU, DO, TP, TQ, TRS, TRG, TRE, plannedDowntimeMinutes, unplannedDowntimeMinutes, cadenceGap]
 
     # Dashboard types
     DashboardSummary:
@@ -1921,23 +1875,7 @@ components:
           type: integer
         totalRejected:
           type: integer
-      required:
-        [
-          currentMonthTrs,
-          currentMonthDO,
-          currentMonthTP,
-          currentMonthTQ,
-          trsObjective,
-          entriesThisMonth,
-          pendingValidations,
-          validatedEntries,
-          rejectedEntries,
-          productionDays,
-          offDays,
-          totalQuantityProduced,
-          totalQuantityConforming,
-          totalRejected,
-        ]
+      required: [currentMonthTrs, currentMonthDO, currentMonthTP, currentMonthTQ, trsObjective, entriesThisMonth, pendingValidations, validatedEntries, rejectedEntries, productionDays, offDays, totalQuantityProduced, totalQuantityConforming, totalRejected]
 
     DailyTrsPoint:
       type: object
@@ -1987,16 +1925,7 @@ components:
           type: number
         isPlanned:
           type: boolean
-      required:
-        [
-          categoryCode,
-          categoryLabel,
-          totalMinutes,
-          occurrences,
-          percentage,
-          cumulativePercentage,
-          isPlanned,
-        ]
+      required: [categoryCode, categoryLabel, totalMinutes, occurrences, percentage, cumulativePercentage, isPlanned]
 
     EquipmentComparisonItem:
       type: object
@@ -2058,18 +1987,7 @@ components:
           type: number
         totalDowntimeUnplanned:
           type: number
-      required:
-        [
-          month,
-          year,
-          trsObjective,
-          totalTR,
-          totalTU,
-          totalTF,
-          totalTN,
-          totalDowntimePlanned,
-          totalDowntimeUnplanned,
-        ]
+      required: [month, year, trsObjective, totalTR, totalTU, totalTF, totalTN, totalDowntimePlanned, totalDowntimeUnplanned]
 
     # Monthly closures
     MonthlyClosure:
@@ -2213,18 +2131,7 @@ components:
           type: string
         importedByName:
           type: ["string", "null"]
-      required:
-        [
-          id,
-          weekNumber,
-          year,
-          date,
-          dayName,
-          activityType,
-          sourceFileName,
-          importedAt,
-          validationStatus,
-        ]
+      required: [id, weekNumber, year, date, dayName, activityType, sourceFileName, importedAt, validationStatus]
 
     PlanWeekSummary:
       type: object
