@@ -82,6 +82,15 @@ export interface Equipment {
   description?: string | null;
   /** Target TRS percentage (0-100) */
   trsObjective: number;
+  /** @nullable */
+  equipmentType?: string | null;
+  /** @nullable */
+  roomId?: string | null;
+  /**
+   * Derived label `code - name` of the linked room when `roomId` is set.
+   * @nullable
+   */
+  roomLabel?: string | null;
   isActive: boolean;
   createdAt: string;
 }
@@ -91,6 +100,8 @@ export interface CreateEquipmentBody {
   code: string;
   description?: string;
   trsObjective: number;
+  equipmentType?: string;
+  roomId?: string;
 }
 
 export interface UpdateEquipmentBody {
@@ -98,6 +109,12 @@ export interface UpdateEquipmentBody {
   code?: string;
   description?: string;
   trsObjective?: number;
+  equipmentType?: string;
+  /**
+   * UUID of the linked room. Send `null` to clear an existing link.
+   * @nullable
+   */
+  roomId?: string | null;
   isActive?: boolean;
 }
 

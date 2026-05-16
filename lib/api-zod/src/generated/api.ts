@@ -140,6 +140,12 @@ export const ListEquipmentsResponseItem = zod.object({
   code: zod.string(),
   description: zod.string().nullish(),
   trsObjective: zod.number().describe("Target TRS percentage (0-100)"),
+  equipmentType: zod.string().nullish(),
+  roomId: zod.string().uuid().nullish(),
+  roomLabel: zod
+    .string()
+    .nullish()
+    .describe("Derived label `code - name` of the linked room when `roomId` is set."),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -153,6 +159,8 @@ export const CreateEquipmentBody = zod.object({
   code: zod.string(),
   description: zod.string().optional(),
   trsObjective: zod.number(),
+  equipmentType: zod.string().optional(),
+  roomId: zod.string().uuid().optional(),
 });
 
 /**
@@ -167,6 +175,12 @@ export const UpdateEquipmentBody = zod.object({
   code: zod.string().optional(),
   description: zod.string().optional(),
   trsObjective: zod.number().optional(),
+  equipmentType: zod.string().optional(),
+  roomId: zod
+    .string()
+    .uuid()
+    .nullish()
+    .describe("UUID of the linked room. Send `null` to clear an existing link."),
   isActive: zod.boolean().optional(),
 });
 
@@ -176,6 +190,12 @@ export const UpdateEquipmentResponse = zod.object({
   code: zod.string(),
   description: zod.string().nullish(),
   trsObjective: zod.number().describe("Target TRS percentage (0-100)"),
+  equipmentType: zod.string().nullish(),
+  roomId: zod.string().uuid().nullish(),
+  roomLabel: zod
+    .string()
+    .nullish()
+    .describe("Derived label `code - name` of the linked room when `roomId` is set."),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -193,6 +213,12 @@ export const DeleteEquipmentResponse = zod.object({
   code: zod.string(),
   description: zod.string().nullish(),
   trsObjective: zod.number().describe("Target TRS percentage (0-100)"),
+  equipmentType: zod.string().nullish(),
+  roomId: zod.string().uuid().nullish(),
+  roomLabel: zod
+    .string()
+    .nullish()
+    .describe("Derived label `code - name` of the linked room when `roomId` is set."),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
 });
@@ -210,6 +236,12 @@ export const ReactivateEquipmentResponse = zod.object({
   code: zod.string(),
   description: zod.string().nullish(),
   trsObjective: zod.number().describe("Target TRS percentage (0-100)"),
+  equipmentType: zod.string().nullish(),
+  roomId: zod.string().uuid().nullish(),
+  roomLabel: zod
+    .string()
+    .nullish()
+    .describe("Derived label `code - name` of the linked room when `roomId` is set."),
   isActive: zod.boolean(),
   createdAt: zod.coerce.date(),
 });

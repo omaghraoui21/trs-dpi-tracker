@@ -137,6 +137,10 @@ vi.mock("@workspace/db", () => {
       trsObjective: "eq.trsObjective",
       description: "eq.description",
       createdAt: "eq.createdAt",
+      siteId: "eq.siteId",
+      roomId: "eq.roomId",
+      equipmentType: "eq.equipmentType",
+      updatedAt: "eq.updatedAt",
     },
     productsTable: {
       id: "p.id",
@@ -200,6 +204,11 @@ vi.mock("@workspace/db", () => {
       id: "ad.id",
       categoryId: "ad.categoryId",
     },
+    roomsTable: {
+      id: "r.id",
+      code: "r.code",
+      name: "r.name",
+    },
     auditLogTable: {
       id: "al.id",
     },
@@ -234,14 +243,17 @@ vi.mock("../middlewares/auth", () => {
 // ─── Imports of code under test (after mocks) ────────────────────────────────
 import request from "supertest";
 import * as auditModule from "../lib/audit";
+import * as referentialDepsModule from "../lib/referential-deps";
 const { default: app } = await import("../app");
 
 // ─── Per-test reset ──────────────────────────────────────────────────────────
 const writeAuditSpy = vi.spyOn(auditModule, "writeAudit").mockImplementation(() => {});
+const countDependenciesSpy = vi.spyOn(referentialDepsModule, "countDependencies");
 
 beforeEach(() => {
   dbMock.reset();
   writeAuditSpy.mockClear();
+  countDependenciesSpy.mockClear();
 });
 
 // ─── Test data fixtures ──────────────────────────────────────────────────────
@@ -328,6 +340,17 @@ describe("equipments routes — Phase 1 contract", () => {
   describe("PATCH /api/equipments/:id", () => {
     it("returns 409 on duplicate code", async () => {
       dbMock.pushResult([eqRow()]); // SELECT existing
+      // Phase 2: code change with historical=0 still runs the UPDATE; push 6
+      // zero entries so the immutability branch is skipped, then the UPDATE
+      // rejects with 23505.
+      pushDepCounts([
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: -1 },
+        { historical: 0, activeOpen: -1 },
+        { historical: 0, activeOpen: 0 },
+      ]);
       dbMock.pushReject(Object.assign(new Error("dup"), { code: "23505" })); // UPDATE rejects
       const res = await request(app).patch(`/api/equipments/${EQ_ID}`).send({ code: "EQ-DUP" });
       expect(res.status).toBe(409);
@@ -488,6 +511,149 @@ describe("equipments routes — Phase 1 contract", () => {
           recordId: EQ_ID,
           oldValues: expect.objectContaining({ isActive: false }),
           newValues: expect.objectContaining({ isActive: true }),
+        }),
+      );
+    });
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// EQUIPMENTS — Phase 2 lifecycle additions (FEAT-001)
+// ──────────────────────────────────────────────────────────────────────────
+describe("equipments routes — Phase 2 lifecycle additions", () => {
+  describe("PATCH /api/equipments/:id code-immutability rule", () => {
+    it("returns 409 with the French immutability message when code changes AND historical > 0; no UPDATE, no audit", async () => {
+      dbMock.pushResult([eqRow({ code: "EQ-001" })]); // SELECT existing
+      // countDependencies: push 6 rule entries with one historical>0 to flip
+      // the immutability branch.
+      pushDepCounts([
+        { historical: 3, activeOpen: 0 }, // production_entries — historical
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: -1 },
+        { historical: 0, activeOpen: -1 },
+        { historical: 0, activeOpen: 0 },
+      ]);
+
+      const res = await request(app).patch(`/api/equipments/${EQ_ID}`).send({ code: "NEW-CODE" });
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({
+        error:
+          "Le code est immuable: cet équipement est référencé par des données historiques (production, saisies journalières, arrêts, KPI ou cadences).",
+      });
+      expect(dbMock.db.update).not.toHaveBeenCalled();
+      expect(writeAuditSpy).not.toHaveBeenCalled();
+    });
+
+    it("still UPDATEs when code changes AND historical = 0 (regression guard)", async () => {
+      dbMock.pushResult([eqRow({ code: "EQ-001" })]); // SELECT existing
+      pushDepCounts([
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: -1 },
+        { historical: 0, activeOpen: -1 },
+        { historical: 0, activeOpen: 0 },
+      ]);
+      dbMock.pushResult([eqRow({ code: "NEW-CODE" })]); // UPDATE returning
+
+      const res = await request(app).patch(`/api/equipments/${EQ_ID}`).send({ code: "NEW-CODE" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.code).toBe("NEW-CODE");
+      expect(dbMock.db.update).toHaveBeenCalledTimes(1);
+      expect(writeAuditSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tableName: "equipments",
+          action: "update",
+          recordId: EQ_ID,
+        }),
+      );
+    });
+
+    it("does NOT invoke countDependencies for non-code field updates even if historical would be > 0", async () => {
+      dbMock.pushResult([eqRow({ code: "EQ-001" })]); // SELECT existing
+      // Direct spy on countDependencies (review #7) — stronger than the
+      // previous db.select call-count check, which was structurally coupled
+      // to internal probing reads.
+      dbMock.pushResult([eqRow({ trsObjective: "90" })]); // UPDATE returning
+
+      const res = await request(app).patch(`/api/equipments/${EQ_ID}`).send({ trsObjective: 90 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.trsObjective).toBe(90);
+      expect(countDependenciesSpy).not.toHaveBeenCalled();
+      expect(dbMock.db.update).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("GET /api/equipments room leftJoin projection", () => {
+    it("includes equipmentType and roomLabel derived from joined room columns", async () => {
+      // The list query now selects an explicit projection that flattens
+      // the joined room columns onto the equipment row. The chainable
+      // mock just resolves to whatever rows we push, so push a synthetic
+      // row that mimics the projection shape.
+      dbMock.pushResult([
+        {
+          ...eqRow({ equipmentType: "mixer", roomId: "00000000-0000-0000-0000-000000000010" }),
+          siteId: null,
+          updatedAt: new Date("2024-01-01T00:00:00Z"),
+          roomCode: "R-01",
+          roomName: "Salle 1",
+        },
+      ]);
+
+      const res = await request(app).get("/api/equipments");
+
+      expect(res.status).toBe(200);
+      expect(res.body.length).toBe(1);
+      expect(res.body[0].equipmentType).toBe("mixer");
+      expect(res.body[0].roomId).toBe("00000000-0000-0000-0000-000000000010");
+      expect(res.body[0].roomLabel).toBe("R-01 - Salle 1");
+    });
+  });
+
+  describe("POST /api/equipments/:id/reactivate idempotency", () => {
+    it("returns 200 with the row and does NOT UPDATE when the equipment is already active", async () => {
+      dbMock.pushResult([eqRow({ isActive: true })]); // SELECT existing — already active
+
+      const res = await request(app).post(`/api/equipments/${EQ_ID}/reactivate`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(EQ_ID);
+      expect(res.body.isActive).toBe(true);
+      expect(dbMock.db.update).not.toHaveBeenCalled();
+      expect(writeAuditSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("PATCH /api/equipments/:id roomId clearing (v2 review #1)", () => {
+    it("accepts roomId=null to clear the FK and returns roomId=null + roomLabel=null", async () => {
+      const ROOM_ID = "00000000-0000-0000-0000-000000000010";
+      // SELECT existing — equipment currently linked to a room.
+      dbMock.pushResult([eqRow({ roomId: ROOM_ID })]);
+      // UPDATE returning — FK cleared, both roomId and (consequently) the
+      // joined roomLabel become null on the next response.
+      dbMock.pushResult([eqRow({ roomId: null })]);
+
+      const res = await request(app).patch(`/api/equipments/${EQ_ID}`).send({ roomId: null });
+
+      expect(res.status).toBe(200);
+      expect(res.body.roomId).toBeNull();
+      expect(res.body.roomLabel).toBeNull();
+      // Code wasn't part of the body, so the immutability branch must not
+      // run.
+      expect(countDependenciesSpy).not.toHaveBeenCalled();
+      expect(dbMock.db.update).toHaveBeenCalledTimes(1);
+      // formatEquipmentRowAsync short-circuits on roomId=null, so no extra
+      // SELECT against roomsTable is issued for the response body.
+      expect(dbMock.db.select).toHaveBeenCalledTimes(1);
+      expect(writeAuditSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tableName: "equipments",
+          action: "update",
+          recordId: EQ_ID,
         }),
       );
     });
