@@ -386,4 +386,55 @@ describe("CategoriesTab", () => {
       }),
     });
   });
+
+  it("ships a CREATE-mode payload through createCat.mutateAsync after opening 'Nouvelle catégorie'", async () => {
+    // Companion to cases 5+6 which exercise the EDIT branch of handleSave.
+    // This locks the CREATE branch: openCreate seeds form.impactKpi to ''
+    // and form.shortcutEquipments to '', so the `|| null` normalization in
+    // handleSave must collapse both to literal `null` on the wire — same
+    // behavior as case 6 but for the create path. impactType defaults to
+    // 'tF', isPlanned + requiresComment default to false, isQuickShortcut
+    // defaults to false. Only `code` + `label` need to be populated to
+    // produce a valid payload.
+    state.categories = [];
+
+    render(<CategoriesTab />);
+
+    // SectionHeader renders the open-create button with addLabel="Nouvelle catégorie".
+    const openButton = screen.getByRole("button", { name: /nouvelle catégorie/i });
+    fireEvent.click(openButton);
+
+    // Populate the two required text Inputs. The dialog renders Code,
+    // Libellé, Description as a sequence of <Input>s in that order (no
+    // htmlFor/id wiring on the labels, so we cannot use getByLabelText).
+    // We pick them off by position from the textbox role.
+    const textInputs = screen.getAllByRole("textbox");
+    const codeInput = textInputs[0];
+    const labelInput = textInputs[1];
+    fireEvent.change(codeInput, { target: { value: "NEW" } });
+    fireEvent.change(labelInput, { target: { value: "New category" } });
+
+    // Capture the create mutation reference held by the component closure
+    // BEFORE clicking Save (same reference-capture pattern as cases 5+6:
+    // the mock factory rebinds state.createCaptured per render).
+    const captured = state.createCaptured!;
+    const saveButton = screen.getByRole("button", { name: /enregistrer/i });
+    await act(async () => {
+      fireEvent.click(saveButton);
+    });
+
+    expect(captured.mutateAsync).toHaveBeenCalledTimes(1);
+    expect(captured.mutateAsync.mock.calls[0][0]).toEqual({
+      data: expect.objectContaining({
+        code: "NEW",
+        label: "New category",
+        impactType: "tF",
+        impactKpi: null,
+        isQuickShortcut: false,
+        shortcutEquipments: null,
+        isPlanned: false,
+        requiresComment: false,
+      }),
+    });
+  });
 });
