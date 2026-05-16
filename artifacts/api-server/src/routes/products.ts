@@ -2,7 +2,8 @@ import { Router, IRouter } from "express";
 import { db, productsTable, cadencesTable, equipmentsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
-import { isUniqueViolation } from "../lib/db-errors";
+import { writeAudit } from "../lib/audit";
+import { withUniqueCheck, countProductDeps } from "../lib/referential-helpers";
 import {
   CreateProductBody,
   UpdateProductBody,
@@ -19,6 +20,8 @@ function formatProduct(p: typeof productsTable.$inferSelect) {
     name: p.name,
     code: p.code,
     description: p.description ?? null,
+    dosage: p.dosage ?? null,
+    pharmaceuticalForm: p.pharmaceuticalForm ?? null,
     isActive: p.isActive,
     createdAt: p.createdAt.toISOString(),
   };
@@ -29,22 +32,46 @@ router.get("/products", requireAuth, async (_req, res): Promise<void> => {
   res.json(rows.map(formatProduct));
 });
 
+// GET dependencies count for a product (used by frontend before deactivation)
+router.get(
+  "/products/:id/dependencies",
+  requireAuth,
+  requireRole("admin"),
+  async (req, res): Promise<void> => {
+    const id = req.params["id"] as string;
+    if (!id) {
+      res.status(400).json({ error: "ID requis" });
+      return;
+    }
+    const deps = await countProductDeps(id);
+    res.json({ dependencies: deps, total: deps.reduce((sum, d) => sum + d.count, 0) });
+  },
+);
+
 router.post("/products", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
   const parsed = CreateProductBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  try {
-    const [row] = await db.insert(productsTable).values(parsed.data).returning();
-    res.status(201).json(formatProduct(row));
-  } catch (err) {
-    if (isUniqueViolation(err)) {
-      res.status(409).json({ error: "Un produit avec ce code existe déjà" });
-      return;
-    }
-    throw err;
-  }
+  const result = await withUniqueCheck(
+    res,
+    async () => {
+      const [row] = await db.insert(productsTable).values(parsed.data).returning();
+      return row;
+    },
+    "Un produit avec ce code existe déjà",
+  );
+  if (!result) return;
+
+  void writeAudit({
+    userId: req.user?.id,
+    tableName: "products",
+    recordId: result.id,
+    action: "create",
+    newValues: parsed.data,
+  });
+  res.status(201).json(formatProduct(result));
 });
 
 router.patch(
@@ -62,19 +89,52 @@ router.patch(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
-    const [row] = await db
-      .update(productsTable)
-      .set(parsed.data)
-      .where(eq(productsTable.id, params.data.id))
-      .returning();
-    if (!row) {
+
+    // Fetch old values for audit
+    const [existing] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, params.data.id));
+    if (!existing) {
       res.status(404).json({ error: "Product not found" });
       return;
     }
-    res.json(formatProduct(row));
+
+    const result = await withUniqueCheck(
+      res,
+      async () => {
+        const [row] = await db
+          .update(productsTable)
+          .set(parsed.data)
+          .where(eq(productsTable.id, params.data.id))
+          .returning();
+        return row;
+      },
+      "Un produit avec ce code existe déjà",
+    );
+    if (!result) return;
+
+    const action =
+      parsed.data.isActive === true && !existing.isActive
+        ? "update"
+        : parsed.data.isActive === false && existing.isActive
+          ? "delete"
+          : "update";
+
+    void writeAudit({
+      userId: req.user?.id,
+      tableName: "products",
+      recordId: result.id,
+      action,
+      oldValues: { name: existing.name, code: existing.code, isActive: existing.isActive },
+      newValues: parsed.data,
+    });
+
+    res.json(formatProduct(result));
   },
 );
 
+// DELETE = soft-delete (deactivate)
 router.delete(
   "/products/:id",
   requireAuth,
@@ -94,11 +154,21 @@ router.delete(
       res.status(404).json({ error: "Product not found" });
       return;
     }
+
+    void writeAudit({
+      userId: req.user?.id,
+      tableName: "products",
+      recordId: id,
+      action: "delete",
+      oldValues: { name: row.name, code: row.code, isActive: true },
+      newValues: { isActive: false },
+    });
+
     res.sendStatus(204);
   },
 );
 
-// Cadences
+// ─── Cadences ──────────────────────────────────────────────────────────────────
 router.get("/cadences", requireAuth, async (req, res): Promise<void> => {
   const query = ListCadencesQueryParams.safeParse(req.query);
   const dbQuery = db
