@@ -136,6 +136,11 @@ router.delete(
       return;
     }
 
+    if (existing.isActive === false) {
+      res.status(200).json(formatProduct(existing));
+      return;
+    }
+
     const deps = await countDependencies("products", id);
     const decision = decideDeleteAction(deps);
 

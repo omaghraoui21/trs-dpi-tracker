@@ -172,6 +172,11 @@ router.delete(
       return;
     }
 
+    if (existing.isActive === false) {
+      res.status(200).json(formatCategory(existing));
+      return;
+    }
+
     const deps = await countDependencies("downtime-categories", id);
     const decision = decideDeleteAction(deps);
 

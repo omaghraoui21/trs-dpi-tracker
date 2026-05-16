@@ -360,6 +360,7 @@ describe("equipments routes — Phase 1 contract", () => {
           tableName: "equipments",
           action: "delete",
           recordId: EQ_ID,
+          oldValues: expect.objectContaining({ isActive: true }),
         }),
       );
       expect(dbMock.db.delete).toHaveBeenCalled();
@@ -383,7 +384,13 @@ describe("equipments routes — Phase 1 contract", () => {
       expect(res.body.isActive).toBe(false);
       expect(writeAuditSpy).toHaveBeenCalledTimes(1);
       expect(writeAuditSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ tableName: "equipments", action: "deactivate" }),
+        expect.objectContaining({
+          tableName: "equipments",
+          action: "deactivate",
+          recordId: EQ_ID,
+          oldValues: expect.objectContaining({ isActive: true }),
+          newValues: expect.objectContaining({ isActive: false }),
+        }),
       );
       expect(dbMock.db.update).toHaveBeenCalled();
       expect(dbMock.db.delete).not.toHaveBeenCalled();
@@ -407,6 +414,38 @@ describe("equipments routes — Phase 1 contract", () => {
       expect(writeAuditSpy).not.toHaveBeenCalled();
       expect(dbMock.db.delete).not.toHaveBeenCalled();
       expect(dbMock.db.update).not.toHaveBeenCalled();
+    });
+
+    it("returns 409 with the generic French message when db.delete races on FK (review #4)", async () => {
+      dbMock.pushResult([eqRow()]); // SELECT existing
+      // No deps -> hard_delete branch
+      pushDepCounts([
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: -1 },
+        { historical: 0, activeOpen: -1 },
+        { historical: 0, activeOpen: 0 },
+      ]);
+      // FK violation lands between count and delete (concurrent insert).
+      dbMock.pushReject(Object.assign(new Error("fk"), { code: "23503" }));
+
+      const res = await request(app).delete(`/api/equipments/${EQ_ID}`);
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ error: "Suppression impossible: dépendance détectée." });
+      expect(writeAuditSpy).not.toHaveBeenCalled();
+    });
+
+    it("is idempotent on already-inactive rows: returns 200 + body, no count/update/audit (review #6)", async () => {
+      dbMock.pushResult([eqRow({ isActive: false })]); // SELECT existing returns inactive
+
+      const res = await request(app).delete(`/api/equipments/${EQ_ID}`);
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(EQ_ID);
+      expect(res.body.isActive).toBe(false);
+      expect(dbMock.db.delete).not.toHaveBeenCalled();
+      expect(dbMock.db.update).not.toHaveBeenCalled();
+      expect(writeAuditSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -443,7 +482,13 @@ describe("equipments routes — Phase 1 contract", () => {
       expect(res.status).toBe(200);
       expect(res.body.isActive).toBe(true);
       expect(writeAuditSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ tableName: "equipments", action: "reactivate", recordId: EQ_ID }),
+        expect.objectContaining({
+          tableName: "equipments",
+          action: "reactivate",
+          recordId: EQ_ID,
+          oldValues: expect.objectContaining({ isActive: false }),
+          newValues: expect.objectContaining({ isActive: true }),
+        }),
       );
     });
   });
@@ -492,7 +537,12 @@ describe("products routes — Phase 1 contract", () => {
       const res = await request(app).delete(`/api/products/${P_ID}`);
       expect(res.status).toBe(204);
       expect(writeAuditSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ tableName: "products", action: "delete", recordId: P_ID }),
+        expect.objectContaining({
+          tableName: "products",
+          action: "delete",
+          recordId: P_ID,
+          oldValues: expect.objectContaining({ isActive: true }),
+        }),
       );
       expect(dbMock.db.delete).toHaveBeenCalled();
       expect(dbMock.db.update).not.toHaveBeenCalled();
@@ -512,7 +562,13 @@ describe("products routes — Phase 1 contract", () => {
       expect(res.status).toBe(200);
       expect(res.body.isActive).toBe(false);
       expect(writeAuditSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ tableName: "products", action: "deactivate" }),
+        expect.objectContaining({
+          tableName: "products",
+          action: "deactivate",
+          recordId: P_ID,
+          oldValues: expect.objectContaining({ isActive: true }),
+          newValues: expect.objectContaining({ isActive: false }),
+        }),
       );
     });
 
@@ -531,6 +587,34 @@ describe("products routes — Phase 1 contract", () => {
       expect(writeAuditSpy).not.toHaveBeenCalled();
       expect(dbMock.db.delete).not.toHaveBeenCalled();
       expect(dbMock.db.update).not.toHaveBeenCalled();
+    });
+
+    it("returns 409 with the generic French message when db.delete races on FK (review #4)", async () => {
+      dbMock.pushResult([pRow()]);
+      pushDepCounts([
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: -1 },
+        { historical: 0, activeOpen: -1 },
+      ]);
+      dbMock.pushReject(Object.assign(new Error("fk"), { code: "23503" }));
+
+      const res = await request(app).delete(`/api/products/${P_ID}`);
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ error: "Suppression impossible: dépendance détectée." });
+      expect(writeAuditSpy).not.toHaveBeenCalled();
+    });
+
+    it("is idempotent on already-inactive rows: returns 200 + body, no count/update/audit (review #6)", async () => {
+      dbMock.pushResult([pRow({ isActive: false })]);
+
+      const res = await request(app).delete(`/api/products/${P_ID}`);
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(P_ID);
+      expect(res.body.isActive).toBe(false);
+      expect(dbMock.db.delete).not.toHaveBeenCalled();
+      expect(dbMock.db.update).not.toHaveBeenCalled();
+      expect(writeAuditSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -565,7 +649,13 @@ describe("products routes — Phase 1 contract", () => {
       expect(res.status).toBe(200);
       expect(res.body.isActive).toBe(true);
       expect(writeAuditSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ tableName: "products", action: "reactivate", recordId: P_ID }),
+        expect.objectContaining({
+          tableName: "products",
+          action: "reactivate",
+          recordId: P_ID,
+          oldValues: expect.objectContaining({ isActive: false }),
+          newValues: expect.objectContaining({ isActive: true }),
+        }),
       );
     });
   });
@@ -622,6 +712,7 @@ describe("downtime-categories routes — Phase 1 contract", () => {
           tableName: "downtime_categories",
           action: "delete",
           recordId: DC_ID,
+          oldValues: expect.objectContaining({ isActive: true }),
         }),
       );
       expect(dbMock.db.delete).toHaveBeenCalled();
@@ -643,6 +734,9 @@ describe("downtime-categories routes — Phase 1 contract", () => {
         expect.objectContaining({
           tableName: "downtime_categories",
           action: "deactivate",
+          recordId: DC_ID,
+          oldValues: expect.objectContaining({ isActive: true }),
+          newValues: expect.objectContaining({ isActive: false }),
         }),
       );
     });
@@ -660,6 +754,32 @@ describe("downtime-categories routes — Phase 1 contract", () => {
       expect(writeAuditSpy).not.toHaveBeenCalled();
       expect(dbMock.db.delete).not.toHaveBeenCalled();
       expect(dbMock.db.update).not.toHaveBeenCalled();
+    });
+
+    it("returns 409 with the generic French message when db.delete races on FK (review #4)", async () => {
+      dbMock.pushResult([dcRow()]);
+      pushDepCounts([
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: -1 },
+      ]);
+      dbMock.pushReject(Object.assign(new Error("fk"), { code: "23503" }));
+
+      const res = await request(app).delete(`/api/downtime-categories/${DC_ID}`);
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ error: "Suppression impossible: dépendance détectée." });
+      expect(writeAuditSpy).not.toHaveBeenCalled();
+    });
+
+    it("is idempotent on already-inactive rows: returns 200 + body, no count/update/audit (review #6)", async () => {
+      dbMock.pushResult([dcRow({ isActive: false })]);
+
+      const res = await request(app).delete(`/api/downtime-categories/${DC_ID}`);
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(DC_ID);
+      expect(res.body.isActive).toBe(false);
+      expect(dbMock.db.delete).not.toHaveBeenCalled();
+      expect(dbMock.db.update).not.toHaveBeenCalled();
+      expect(writeAuditSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -698,6 +818,8 @@ describe("downtime-categories routes — Phase 1 contract", () => {
           tableName: "downtime_categories",
           action: "reactivate",
           recordId: DC_ID,
+          oldValues: expect.objectContaining({ isActive: false }),
+          newValues: expect.objectContaining({ isActive: true }),
         }),
       );
     });
