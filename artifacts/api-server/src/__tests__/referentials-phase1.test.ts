@@ -243,14 +243,17 @@ vi.mock("../middlewares/auth", () => {
 // ─── Imports of code under test (after mocks) ────────────────────────────────
 import request from "supertest";
 import * as auditModule from "../lib/audit";
+import * as referentialDepsModule from "../lib/referential-deps";
 const { default: app } = await import("../app");
 
 // ─── Per-test reset ──────────────────────────────────────────────────────────
 const writeAuditSpy = vi.spyOn(auditModule, "writeAudit").mockImplementation(() => {});
+const countDependenciesSpy = vi.spyOn(referentialDepsModule, "countDependencies");
 
 beforeEach(() => {
   dbMock.reset();
   writeAuditSpy.mockClear();
+  countDependenciesSpy.mockClear();
 });
 
 // ─── Test data fixtures ──────────────────────────────────────────────────────
@@ -537,7 +540,7 @@ describe("equipments routes — Phase 2 lifecycle additions", () => {
       expect(res.status).toBe(409);
       expect(res.body).toEqual({
         error:
-          "Le code est immuable: cet équipement est référencé par des données historiques (production, arrêts, KPI ou cadences).",
+          "Le code est immuable: cet équipement est référencé par des données historiques (production, saisies journalières, arrêts, KPI ou cadences).",
       });
       expect(dbMock.db.update).not.toHaveBeenCalled();
       expect(writeAuditSpy).not.toHaveBeenCalled();
@@ -571,18 +574,16 @@ describe("equipments routes — Phase 2 lifecycle additions", () => {
 
     it("does NOT invoke countDependencies for non-code field updates even if historical would be > 0", async () => {
       dbMock.pushResult([eqRow({ code: "EQ-001" })]); // SELECT existing
-      // No pushDepCounts: if the route mistakenly called countDependencies the
-      // chain would hand back an empty [] for each select, downstream code
-      // would still pass, but db.select call count gives the regression
-      // signal: only the SELECT existing should fire (one db.select call),
-      // then the UPDATE.
+      // Direct spy on countDependencies (review #7) — stronger than the
+      // previous db.select call-count check, which was structurally coupled
+      // to internal probing reads.
       dbMock.pushResult([eqRow({ trsObjective: "90" })]); // UPDATE returning
 
       const res = await request(app).patch(`/api/equipments/${EQ_ID}`).send({ trsObjective: 90 });
 
       expect(res.status).toBe(200);
       expect(res.body.trsObjective).toBe(90);
-      expect(dbMock.db.select).toHaveBeenCalledTimes(1);
+      expect(countDependenciesSpy).not.toHaveBeenCalled();
       expect(dbMock.db.update).toHaveBeenCalledTimes(1);
     });
   });
