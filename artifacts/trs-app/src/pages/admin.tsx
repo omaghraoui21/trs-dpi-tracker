@@ -19,6 +19,8 @@ import {
   useListDowntimeCategories,
   useCreateDowntimeCategory,
   useUpdateDowntimeCategory,
+  useDeleteDowntimeCategory,
+  useReactivateDowntimeCategory,
   useListMonthlyClosures,
   useCreateMonthlyClosure,
   getListUsersQueryKey,
@@ -27,6 +29,7 @@ import {
   getListCadencesQueryKey,
   getListDowntimeCategoriesQueryKey,
   getListMonthlyClosuresQueryKey,
+  type DowntimeCategory,
 } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -1244,9 +1247,10 @@ function CadencesTab() {
 }
 
 // ─── Downtime Categories Tab ───────────────────────────────
-function CategoriesTab() {
+export function CategoriesTab() {
   const qc = useQueryClient();
-  const { data: categories } = useListDowntimeCategories();
+  const [includeInactive, setIncludeInactive] = useState(false);
+  const { data: categories } = useListDowntimeCategories({ includeInactive });
   const createCat = useCreateDowntimeCategory();
   const updateCat = useUpdateDowntimeCategory();
   const [open, setOpen] = useState(false);
@@ -1257,18 +1261,48 @@ function CategoriesTab() {
     description: "",
     famille: "",
     impactType: "tF" as "tO" | "tR" | "tF" | "tN" | "tU" | "TQ",
+    impactKpi: "" as string,
     isPlanned: false,
     requiresComment: false,
     isQuickShortcut: false,
     shortcutEquipments: "",
   });
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirmRaw] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const deleteCat = useMutation({
-    mutationFn: (id: string) => apiDelete(`/api/downtime-categories/${id}`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: getListDowntimeCategoriesQueryKey() });
-      setDeleteConfirm(null);
+  // Invalidate every cached variant of /api/downtime-categories (mirrors
+  // ProductsTab) — both the active-only default view and the
+  // includeInactive=true view — by matching the queryKey prefix produced by
+  // getListDowntimeCategoriesQueryKey().
+  const invalidateList = () =>
+    qc.invalidateQueries({ queryKey: getListDowntimeCategoriesQueryKey() });
+
+  const setDeleteConfirm = (id: string | null) => {
+    setActionError(null);
+    setDeleteConfirmRaw(id);
+  };
+
+  const deleteCat = useDeleteDowntimeCategory({
+    mutation: {
+      onSuccess: () => {
+        invalidateList();
+        setDeleteConfirmRaw(null);
+        setActionError(null);
+      },
+      onError: (err: unknown) => {
+        setActionError(extractErrorMessage(err));
+      },
+    },
+  });
+  const reactivateCat = useReactivateDowntimeCategory({
+    mutation: {
+      onSuccess: () => {
+        invalidateList();
+        setActionError(null);
+      },
+      onError: (err: unknown) => {
+        setActionError(extractErrorMessage(err));
+      },
     },
   });
 
@@ -1280,25 +1314,16 @@ function CategoriesTab() {
       description: "",
       famille: "",
       impactType: "tF",
+      impactKpi: "",
       isPlanned: false,
       requiresComment: false,
       isQuickShortcut: false,
       shortcutEquipments: "",
     });
+    setActionError(null);
     setOpen(true);
   };
-  const openEdit = (c: {
-    id: string;
-    code: string;
-    label: string;
-    description?: string | null;
-    famille?: string | null;
-    impactType: "tO" | "tR" | "tF" | "tN" | "tU" | "TQ";
-    isPlanned: boolean;
-    requiresComment: boolean;
-    isQuickShortcut?: boolean;
-    shortcutEquipments?: string | null;
-  }) => {
+  const openEdit = (c: DowntimeCategory) => {
     setEditing(c.id);
     setForm({
       code: c.code,
@@ -1306,29 +1331,37 @@ function CategoriesTab() {
       description: c.description ?? "",
       famille: c.famille ?? "",
       impactType: c.impactType,
+      impactKpi: c.impactKpi ?? "",
       isPlanned: c.isPlanned,
       requiresComment: c.requiresComment,
       isQuickShortcut: c.isQuickShortcut ?? false,
       shortcutEquipments: c.shortcutEquipments ?? "",
     });
+    setActionError(null);
     setOpen(true);
   };
   const handleSave = async () => {
+    setActionError(null);
     const payload = {
       code: form.code,
       label: form.label,
       description: form.description || undefined,
       famille: form.famille || undefined,
       impactType: form.impactType,
+      impactKpi: form.impactKpi || null,
       isPlanned: form.isPlanned,
       requiresComment: form.requiresComment,
       isQuickShortcut: form.isQuickShortcut,
       shortcutEquipments: form.shortcutEquipments || null,
     };
-    if (editing) await apiFetch(`/api/downtime-categories/${editing}`, "PATCH", payload);
-    else await apiFetch("/api/downtime-categories", "POST", payload);
-    qc.invalidateQueries({ queryKey: getListDowntimeCategoriesQueryKey() });
-    setOpen(false);
+    try {
+      if (editing) await updateCat.mutateAsync({ id: editing, data: payload });
+      else await createCat.mutateAsync({ data: payload });
+      invalidateList();
+      setOpen(false);
+    } catch (err) {
+      setActionError(extractErrorMessage(err));
+    }
   };
 
   return (
@@ -1339,121 +1372,156 @@ function CategoriesTab() {
         onAdd={openCreate}
         addLabel="Nouvelle catégorie"
       />
+      <div className="flex items-center justify-between border border-border rounded-lg px-4 py-2">
+        <Label htmlFor="categories-include-inactive" className="text-sm">
+          Afficher les inactifs
+        </Label>
+        <Switch
+          id="categories-include-inactive"
+          checked={includeInactive}
+          onCheckedChange={setIncludeInactive}
+        />
+      </div>
+      {actionError && <p className="text-xs text-red-500">{actionError}</p>}
       <TableWrapper>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40">
-              {["Code", "Libellé", "Famille", "Impact", "Type", "Cmt requis", "Raccourci", ""].map(
-                (h) => (
-                  <th
-                    key={h}
-                    className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase"
-                  >
-                    {h}
-                  </th>
-                ),
-              )}
+              {[
+                "Code",
+                "Libellé",
+                "Famille",
+                "Impact",
+                "Type",
+                "KPI",
+                "Cmt requis",
+                "Raccourci",
+                "Statut",
+                "",
+              ].map((h) => (
+                <th
+                  key={h}
+                  className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase"
+                >
+                  {h}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {categories?.map(
-              (c: {
-                id: string;
-                code: string;
-                label: string;
-                description?: string | null;
-                famille?: string | null;
-                impactType: "tO" | "tR" | "tF" | "tN" | "tU" | "TQ";
-                isPlanned: boolean;
-                requiresComment: boolean;
-                isActive?: boolean;
-                isQuickShortcut?: boolean;
-                shortcutEquipments?: string | null;
-              }) => (
-                <tr
-                  key={c.id}
-                  className="border-b border-border/50 hover:bg-muted/30 transition-colors"
-                >
-                  <td className="px-4 py-3 font-mono text-xs font-bold">{c.code}</td>
-                  <td className="px-4 py-3">{c.label}</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground max-w-[140px] truncate">
-                    {c.famille ?? <span className="text-border">—</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge className="bg-slate-500/20 text-slate-400 text-xs">{c.impactType}</Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge
-                      className={
-                        c.isPlanned
-                          ? "bg-blue-500/20 text-blue-400 text-xs"
-                          : "bg-red-500/20 text-red-400 text-xs"
-                      }
-                    >
-                      {c.isPlanned ? "Planifié" : "Non planifié"}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    {c.requiresComment ? (
-                      <CheckCircle className="h-4 w-4 text-amber-500" />
+            {categories?.map((c: DowntimeCategory) => (
+              <tr
+                key={c.id}
+                className="border-b border-border/50 hover:bg-muted/30 transition-colors"
+              >
+                <td className="px-4 py-3 font-mono text-xs font-bold">{c.code}</td>
+                <td className="px-4 py-3">{c.label}</td>
+                <td className="px-4 py-3 text-xs text-muted-foreground max-w-[140px] truncate">
+                  {c.famille ?? <span className="text-border">—</span>}
+                </td>
+                <td className="px-4 py-3">
+                  <Badge className="bg-slate-500/20 text-slate-400 text-xs">{c.impactType}</Badge>
+                </td>
+                <td className="px-4 py-3">
+                  <Badge
+                    className={
+                      c.isPlanned
+                        ? "bg-blue-500/20 text-blue-400 text-xs"
+                        : "bg-red-500/20 text-red-400 text-xs"
+                    }
+                  >
+                    {c.isPlanned ? "Planifié" : "Non planifié"}
+                  </Badge>
+                </td>
+                <td className="px-4 py-3 font-mono text-xs">{c.impactKpi ?? "—"}</td>
+                <td className="px-4 py-3">
+                  {c.requiresComment ? (
+                    <CheckCircle className="h-4 w-4 text-amber-500" />
+                  ) : (
+                    <span className="text-muted-foreground text-xs">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  {c.isQuickShortcut ? (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-400">
+                      {c.shortcutEquipments || "Tous"}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground text-xs">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <StatusBadge active={c.isActive ?? true} />
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex justify-end items-center gap-1">
+                    {!c.isActive ? (
+                      <button
+                        title="Réactiver"
+                        className="h-9 px-2.5 flex items-center gap-1 rounded-lg text-sky-500 hover:bg-sky-500/10 text-xs font-medium"
+                        onClick={() => {
+                          setActionError(null);
+                          reactivateCat.mutate({ id: c.id });
+                        }}
+                      >
+                        <RefreshCw className="h-4 w-4" /> Réactiver
+                      </button>
+                    ) : deleteConfirm === c.id ? (
+                      <>
+                        <span className="text-xs text-red-400 mr-1">Désactiver ?</span>
+                        <button
+                          className="h-8 px-2.5 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600"
+                          onClick={() => {
+                            setActionError(null);
+                            deleteCat.mutate({ id: c.id });
+                          }}
+                        >
+                          Oui
+                        </button>
+                        <button
+                          className="h-8 px-2.5 rounded-lg border border-border text-xs hover:bg-muted"
+                          onClick={() => setDeleteConfirm(null)}
+                        >
+                          Non
+                        </button>
+                      </>
                     ) : (
-                      <span className="text-muted-foreground text-xs">—</span>
+                      <>
+                        <button
+                          title="Modifier"
+                          className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted"
+                          onClick={() => {
+                            setActionError(null);
+                            openEdit(c);
+                          }}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button
+                          className="h-9 w-9 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-500/10"
+                          onClick={() => setDeleteConfirm(c.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </>
                     )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {c.isQuickShortcut ? (
-                      <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-500/15 text-emerald-400">
-                        {c.shortcutEquipments || "Tous"}
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end items-center gap-1">
-                      {deleteConfirm === c.id ? (
-                        <>
-                          <span className="text-xs text-red-400 mr-1">Désactiver ?</span>
-                          <button
-                            className="h-8 px-2.5 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600"
-                            onClick={() => deleteCat.mutate(c.id)}
-                          >
-                            Oui
-                          </button>
-                          <button
-                            className="h-8 px-2.5 rounded-lg border border-border text-xs hover:bg-muted"
-                            onClick={() => setDeleteConfirm(null)}
-                          >
-                            Non
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted"
-                            onClick={() => openEdit(c)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          {c.isActive !== false && (
-                            <button
-                              className="h-9 w-9 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-500/10"
-                              onClick={() => setDeleteConfirm(c.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ),
-            )}
+                  </div>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </TableWrapper>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(v) => {
+          // Closing the dialog (Annuler / Escape / overlay click) must clear
+          // the shared actionError so a stale handleSave error does not bleed
+          // into the table-level error slot above the categories table.
+          if (!v) setActionError(null);
+          setOpen(v);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editing ? "Modifier" : "Nouvelle"} catégorie d'arrêt</DialogTitle>
@@ -1519,6 +1587,29 @@ function CategoriesTab() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1.5">
+              <Label>KPI impacté</Label>
+              <Select
+                value={form.impactKpi || "__none__"}
+                onValueChange={(v) =>
+                  setForm((f) => ({ ...f, impactKpi: v === "__none__" ? "" : v }))
+                }
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder="Sélectionner un KPI..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__" className="py-3 text-muted-foreground">
+                    — Non classifié
+                  </SelectItem>
+                  {KPI_CODES.map((k) => (
+                    <SelectItem key={k} value={k} className="py-3">
+                      {k}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex items-center justify-between border border-border rounded-lg p-4">
               <Label>Arrêt planifié</Label>
               <Switch
@@ -1561,9 +1652,17 @@ function CategoriesTab() {
                 />
               </div>
             )}
+            {actionError && <p className="text-xs text-red-500">{actionError}</p>}
           </div>
           <DialogFooter>
-            <Button variant="outline" className="h-11" onClick={() => setOpen(false)}>
+            <Button
+              variant="outline"
+              className="h-11"
+              onClick={() => {
+                setActionError(null);
+                setOpen(false);
+              }}
+            >
               Annuler
             </Button>
             <Button className="h-11 bg-sky-500 hover:bg-sky-400 text-white" onClick={handleSave}>

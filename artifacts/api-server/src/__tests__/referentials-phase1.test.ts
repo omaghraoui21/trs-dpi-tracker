@@ -159,6 +159,7 @@ vi.mock("@workspace/db", () => {
       description: "dc.description",
       famille: "dc.famille",
       impactType: "dc.impactType",
+      impactKpi: "dc.impactKpi",
       isPlanned: "dc.isPlanned",
       requiresComment: "dc.requiresComment",
       isActive: "dc.isActive",
@@ -300,6 +301,7 @@ function dcRow(overrides: Record<string, unknown> = {}) {
     description: null,
     famille: null,
     impactType: "tF",
+    impactKpi: null,
     isPlanned: false,
     requiresComment: false,
     isActive: true,
@@ -989,6 +991,14 @@ describe("downtime-categories routes — Phase 1 contract", () => {
   describe("PATCH /api/downtime-categories/:id", () => {
     it("returns 409 on duplicate code", async () => {
       dbMock.pushResult([dcRow()]);
+      // Phase 4: code change with historical=0 still runs the UPDATE; push 2
+      // zero entries (downtime_events with activeOpen branch +
+      // activity_downtimes without) so the immutability branch is skipped,
+      // then the UPDATE rejects with 23505.
+      pushDepCounts([
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: -1 },
+      ]);
       dbMock.pushReject(Object.assign(new Error("dup"), { code: "23505" }));
       const res = await request(app)
         .patch(`/api/downtime-categories/${DC_ID}`)
@@ -1127,6 +1137,116 @@ describe("downtime-categories routes — Phase 1 contract", () => {
           newValues: expect.objectContaining({ isActive: true }),
         }),
       );
+    });
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// DOWNTIME CATEGORIES — Phase 4 lifecycle additions (FEAT-001)
+// ──────────────────────────────────────────────────────────────────────────
+describe("downtime-categories routes — Phase 4 lifecycle additions", () => {
+  describe("PATCH /api/downtime-categories/:id code-immutability rule", () => {
+    it("returns 409 with the French immutability message when code changes AND historical > 0; no UPDATE, no audit", async () => {
+      dbMock.pushResult([dcRow({ code: "DC-001" })]); // SELECT existing
+      // 2 rules for downtime-categories: downtime_events (with activeOpen
+      // branch) + activity_downtimes (no activeOpen branch). One historical
+      // > 0 trips the immutability gate.
+      pushDepCounts([
+        { historical: 5, activeOpen: 0 }, // downtime_events — historical
+        { historical: 0, activeOpen: -1 },
+      ]);
+
+      const res = await request(app)
+        .patch(`/api/downtime-categories/${DC_ID}`)
+        .send({ code: "NEW" });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toContain("Le code est immuable");
+      expect(dbMock.db.update).not.toHaveBeenCalled();
+      expect(writeAuditSpy).not.toHaveBeenCalled();
+    });
+
+    it("still UPDATEs when code changes AND historical = 0 (regression guard)", async () => {
+      dbMock.pushResult([dcRow({ code: "DC-001" })]); // SELECT existing
+      pushDepCounts([
+        { historical: 0, activeOpen: 0 },
+        { historical: 0, activeOpen: -1 },
+      ]);
+      dbMock.pushResult([dcRow({ code: "NEW" })]); // UPDATE returning
+
+      const res = await request(app)
+        .patch(`/api/downtime-categories/${DC_ID}`)
+        .send({ code: "NEW" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.code).toBe("NEW");
+      expect(dbMock.db.update).toHaveBeenCalledTimes(1);
+      expect(writeAuditSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tableName: "downtime_categories",
+          action: "update",
+          recordId: DC_ID,
+        }),
+      );
+    });
+
+    it("does NOT invoke countDependencies for non-code field updates", async () => {
+      dbMock.pushResult([dcRow({ code: "DC-001" })]); // SELECT existing
+      dbMock.pushResult([dcRow({ label: "Updated label" })]); // UPDATE returning
+
+      const res = await request(app)
+        .patch(`/api/downtime-categories/${DC_ID}`)
+        .send({ label: "Updated label" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.label).toBe("Updated label");
+      expect(countDependenciesSpy).not.toHaveBeenCalled();
+      expect(dbMock.db.update).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("POST /api/downtime-categories field round-trip", () => {
+    it("projects impactKpi + isQuickShortcut + shortcutEquipments through the response body", async () => {
+      dbMock.pushResult([
+        dcRow({ impactKpi: "TRS", isQuickShortcut: true, shortcutEquipments: "A27,A28" }),
+      ]); // INSERT returning
+
+      const res = await request(app).post("/api/downtime-categories").send({
+        code: "DC-001",
+        label: "Panne",
+        impactType: "tF",
+        isPlanned: false,
+        requiresComment: false,
+        impactKpi: "TRS",
+        isQuickShortcut: true,
+        shortcutEquipments: "A27,A28",
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.impactKpi).toBe("TRS");
+      expect(res.body.isQuickShortcut).toBe(true);
+      expect(res.body.shortcutEquipments).toBe("A27,A28");
+    });
+  });
+
+  describe("PATCH /api/downtime-categories/:id field round-trip", () => {
+    it("persists impactKpi + isQuickShortcut + shortcutEquipments through the response body", async () => {
+      dbMock.pushResult([dcRow()]); // SELECT existing
+      // No code change -> countDependencies not invoked.
+      dbMock.pushResult([
+        dcRow({ impactKpi: "DO", isQuickShortcut: true, shortcutEquipments: "B12" }),
+      ]); // UPDATE returning
+
+      const res = await request(app).patch(`/api/downtime-categories/${DC_ID}`).send({
+        impactKpi: "DO",
+        isQuickShortcut: true,
+        shortcutEquipments: "B12",
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.impactKpi).toBe("DO");
+      expect(res.body.isQuickShortcut).toBe(true);
+      expect(res.body.shortcutEquipments).toBe("B12");
     });
   });
 });

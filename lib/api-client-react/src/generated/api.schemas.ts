@@ -188,6 +188,24 @@ export const DowntimeCategoryImpactType = {
   TQ: "TQ",
 } as const;
 
+/**
+ * KPI dimension this category impacts (TRS / TRG / TRE / DO / TP / TQ / PLANNING)
+ * @nullable
+ */
+export type DowntimeCategoryImpactKpi =
+  | (typeof DowntimeCategoryImpactKpi)[keyof typeof DowntimeCategoryImpactKpi]
+  | null;
+
+export const DowntimeCategoryImpactKpi = {
+  TRS: "TRS",
+  TRG: "TRG",
+  TRE: "TRE",
+  DO: "DO",
+  TP: "TP",
+  TQ: "TQ",
+  PLANNING: "PLANNING",
+} as const;
+
 export interface DowntimeCategory {
   id: string;
   code: string;
@@ -201,10 +219,22 @@ export interface DowntimeCategory {
   famille?: string | null;
   /** Which time dimension this category impacts */
   impactType: DowntimeCategoryImpactType;
+  /**
+   * KPI dimension this category impacts (TRS / TRG / TRE / DO / TP / TQ / PLANNING)
+   * @nullable
+   */
+  impactKpi: DowntimeCategoryImpactKpi;
   /** Whether this is a planned stop */
   isPlanned: boolean;
   requiresComment: boolean;
   isActive: boolean;
+  /** When true, render this category as a quick-action button in the operator entry screen */
+  isQuickShortcut: boolean;
+  /**
+   * Comma-separated list of equipment codes (free-form, nullable). Empty/null means the shortcut applies to all equipments.
+   * @nullable
+   */
+  shortcutEquipments?: string | null;
 }
 
 export type CreateDowntimeCategoryBodyImpactType =
@@ -219,6 +249,24 @@ export const CreateDowntimeCategoryBodyImpactType = {
   TQ: "TQ",
 } as const;
 
+/**
+ * KPI dimension this category impacts (TRS / TRG / TRE / DO / TP / TQ / PLANNING)
+ * @nullable
+ */
+export type CreateDowntimeCategoryBodyImpactKpi =
+  | (typeof CreateDowntimeCategoryBodyImpactKpi)[keyof typeof CreateDowntimeCategoryBodyImpactKpi]
+  | null;
+
+export const CreateDowntimeCategoryBodyImpactKpi = {
+  TRS: "TRS",
+  TRG: "TRG",
+  TRE: "TRE",
+  DO: "DO",
+  TP: "TP",
+  TQ: "TQ",
+  PLANNING: "PLANNING",
+} as const;
+
 export interface CreateDowntimeCategoryBody {
   code: string;
   label: string;
@@ -226,8 +274,20 @@ export interface CreateDowntimeCategoryBody {
   /** Family grouping for this stop category */
   famille?: string;
   impactType: CreateDowntimeCategoryBodyImpactType;
+  /**
+   * KPI dimension this category impacts (TRS / TRG / TRE / DO / TP / TQ / PLANNING)
+   * @nullable
+   */
+  impactKpi?: CreateDowntimeCategoryBodyImpactKpi;
   isPlanned: boolean;
   requiresComment: boolean;
+  /** When true, render this category as a quick-action button in the operator entry screen */
+  isQuickShortcut?: boolean;
+  /**
+   * Comma-separated list of equipment codes (free-form, nullable). Empty/null means the shortcut applies to all equipments.
+   * @nullable
+   */
+  shortcutEquipments?: string | null;
 }
 
 export type UpdateDowntimeCategoryBodyImpactType =
@@ -242,6 +302,24 @@ export const UpdateDowntimeCategoryBodyImpactType = {
   TQ: "TQ",
 } as const;
 
+/**
+ * KPI dimension this category impacts (TRS / TRG / TRE / DO / TP / TQ / PLANNING)
+ * @nullable
+ */
+export type UpdateDowntimeCategoryBodyImpactKpi =
+  | (typeof UpdateDowntimeCategoryBodyImpactKpi)[keyof typeof UpdateDowntimeCategoryBodyImpactKpi]
+  | null;
+
+export const UpdateDowntimeCategoryBodyImpactKpi = {
+  TRS: "TRS",
+  TRG: "TRG",
+  TRE: "TRE",
+  DO: "DO",
+  TP: "TP",
+  TQ: "TQ",
+  PLANNING: "PLANNING",
+} as const;
+
 export interface UpdateDowntimeCategoryBody {
   code?: string;
   label?: string;
@@ -249,9 +327,21 @@ export interface UpdateDowntimeCategoryBody {
   /** Family grouping for this stop category */
   famille?: string;
   impactType?: UpdateDowntimeCategoryBodyImpactType;
+  /**
+   * KPI dimension this category impacts (TRS / TRG / TRE / DO / TP / TQ / PLANNING)
+   * @nullable
+   */
+  impactKpi?: UpdateDowntimeCategoryBodyImpactKpi;
   isPlanned?: boolean;
   requiresComment?: boolean;
   isActive?: boolean;
+  /** When true, render this category as a quick-action button in the operator entry screen */
+  isQuickShortcut?: boolean;
+  /**
+   * Comma-separated list of equipment codes (free-form, nullable). Empty/null means the shortcut applies to all equipments.
+   * @nullable
+   */
+  shortcutEquipments?: string | null;
 }
 
 export interface DowntimeEvent {

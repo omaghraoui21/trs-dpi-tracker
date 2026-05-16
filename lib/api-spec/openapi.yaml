@@ -1576,6 +1576,10 @@ components:
           type: string
           enum: [tO, tR, tF, tN, tU, TQ]
           description: Which time dimension this category impacts
+        impactKpi:
+          type: ["string", "null"]
+          enum: [TRS, TRG, TRE, DO, TP, TQ, PLANNING, null]
+          description: KPI dimension this category impacts (TRS / TRG / TRE / DO / TP / TQ / PLANNING)
         isPlanned:
           type: boolean
           description: Whether this is a planned stop
@@ -1583,7 +1587,14 @@ components:
           type: boolean
         isActive:
           type: boolean
-      required: [id, code, label, impactType, isPlanned, requiresComment, isActive]
+        isQuickShortcut:
+          type: boolean
+          default: false
+          description: When true, render this category as a quick-action button in the operator entry screen
+        shortcutEquipments:
+          type: ["string", "null"]
+          description: "Comma-separated list of equipment codes (free-form, nullable). Empty/null means the shortcut applies to all equipments."
+      required: [id, code, label, impactType, impactKpi, isPlanned, requiresComment, isActive, isQuickShortcut]
 
     CreateDowntimeCategoryBody:
       type: object
@@ -1600,10 +1611,20 @@ components:
         impactType:
           type: string
           enum: [tO, tR, tF, tN, tU, TQ]
+        impactKpi:
+          type: ["string", "null"]
+          enum: [TRS, TRG, TRE, DO, TP, TQ, PLANNING, null]
+          description: KPI dimension this category impacts (TRS / TRG / TRE / DO / TP / TQ / PLANNING)
         isPlanned:
           type: boolean
         requiresComment:
           type: boolean
+        isQuickShortcut:
+          type: boolean
+          description: When true, render this category as a quick-action button in the operator entry screen
+        shortcutEquipments:
+          type: ["string", "null"]
+          description: "Comma-separated list of equipment codes (free-form, nullable). Empty/null means the shortcut applies to all equipments."
       required: [code, label, impactType, isPlanned, requiresComment]
 
     UpdateDowntimeCategoryBody:
@@ -1621,12 +1642,22 @@ components:
         impactType:
           type: string
           enum: [tO, tR, tF, tN, tU, TQ]
+        impactKpi:
+          type: ["string", "null"]
+          enum: [TRS, TRG, TRE, DO, TP, TQ, PLANNING, null]
+          description: KPI dimension this category impacts (TRS / TRG / TRE / DO / TP / TQ / PLANNING)
         isPlanned:
           type: boolean
         requiresComment:
           type: boolean
         isActive:
           type: boolean
+        isQuickShortcut:
+          type: boolean
+          description: When true, render this category as a quick-action button in the operator entry screen
+        shortcutEquipments:
+          type: ["string", "null"]
+          description: "Comma-separated list of equipment codes (free-form, nullable). Empty/null means the shortcut applies to all equipments."
 
     # Downtime Event
     DowntimeEvent:
