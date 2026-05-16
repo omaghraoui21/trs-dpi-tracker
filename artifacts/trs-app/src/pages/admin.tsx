@@ -1006,7 +1006,16 @@ export function ProductsTab() {
           </tbody>
         </table>
       </TableWrapper>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(v) => {
+          // Closing the dialog (Annuler / Escape / overlay click) must clear
+          // the shared actionError so a stale handleSave error does not bleed
+          // into the table-level error slot above the products table.
+          if (!v) setActionError(null);
+          setOpen(v);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editing ? "Modifier" : "Nouveau"} produit</DialogTitle>
@@ -1031,7 +1040,14 @@ export function ProductsTab() {
             {actionError && <p className="text-xs text-red-500">{actionError}</p>}
           </div>
           <DialogFooter>
-            <Button variant="outline" className="h-11" onClick={() => setOpen(false)}>
+            <Button
+              variant="outline"
+              className="h-11"
+              onClick={() => {
+                setActionError(null);
+                setOpen(false);
+              }}
+            >
               Annuler
             </Button>
             <Button className="h-11 bg-sky-500 hover:bg-sky-400 text-white" onClick={handleSave}>

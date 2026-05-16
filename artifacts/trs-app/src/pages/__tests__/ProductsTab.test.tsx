@@ -221,4 +221,45 @@ describe("ProductsTab", () => {
 
     expect(screen.getByText("Ce produit a 3 saisies de production liées.")).toBeTruthy();
   });
+
+  it("clears actionError when the create/edit dialog is closed after a save failure", async () => {
+    state.products = [];
+
+    render(<ProductsTab />);
+
+    // Open the create dialog. This triggers a re-render that rebinds
+    // state.createCaptured to the freshly-returned mutation object — the
+    // reference the component closure now holds.
+    const newButton = screen.getByRole("button", { name: /nouveau produit/i });
+    fireEvent.click(newButton);
+
+    expect(state.createCaptured).not.toBeNull();
+    // Force the create mutation's mutateAsync to reject with a 409-shaped
+    // error so handleSave's try/catch populates actionError. Mutating the
+    // captured object in place is safe because the component holds a
+    // reference to it (admin.tsx: `const createProduct = useCreateProduct()`).
+    const err = {
+      response: { data: { error: "Le code 'P-001' est déjà utilisé." } },
+    };
+    state.createCaptured!.mutateAsync = vi.fn().mockRejectedValueOnce(err);
+
+    // Trigger handleSave by clicking Enregistrer; await the async catch.
+    const saveButton = screen.getByRole("button", { name: /enregistrer/i });
+    await act(async () => {
+      fireEvent.click(saveButton);
+    });
+
+    // The error text appears (it is rendered both inside the dialog and in
+    // the table-level actionError slot above the table — getAllByText covers
+    // both).
+    expect(screen.getAllByText("Le code 'P-001' est déjà utilisé.").length).toBeGreaterThan(0);
+
+    // Close the dialog via the Annuler button. Before the fix, this left the
+    // error visible in the table-level slot; after the fix, actionError is
+    // cleared on close.
+    const cancelButton = screen.getByRole("button", { name: /annuler/i });
+    fireEvent.click(cancelButton);
+
+    expect(screen.queryByText("Le code 'P-001' est déjà utilisé.")).toBeNull();
+  });
 });
