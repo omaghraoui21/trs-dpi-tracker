@@ -12,6 +12,8 @@ import {
   useListProducts,
   useCreateProduct,
   useUpdateProduct,
+  useDeleteProduct,
+  useReactivateProduct,
   useListCadences,
   useUpsertCadence,
   useListDowntimeCategories,
@@ -793,44 +795,106 @@ export function EquipmentsTab() {
 }
 
 // ─── Products Tab ──────────────────────────────────────────
-function ProductsTab() {
+type ProductRow = {
+  id: string;
+  name: string;
+  code: string;
+  description?: string | null;
+  dosage?: string | null;
+  pharmaceuticalForm?: string | null;
+  isActive: boolean;
+};
+
+export function ProductsTab() {
   const qc = useQueryClient();
-  const { data: products } = useListProducts();
+  const [includeInactive, setIncludeInactive] = useState(false);
+  const { data: products } = useListProducts({ includeInactive });
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", code: "", description: "" });
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    name: "",
+    code: "",
+    description: "",
+    dosage: "",
+    pharmaceuticalForm: "",
+  });
+  const [deleteConfirm, setDeleteConfirmRaw] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const deleteProduct = useMutation({
-    mutationFn: (id: string) => apiDelete(`/api/products/${id}`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: getListProductsQueryKey() });
-      setDeleteConfirm(null);
+  // Invalidate every cached variant of /api/products (mirrors EquipmentsTab) —
+  // both the active-only default view and the includeInactive=true view — by
+  // matching the queryKey prefix produced by getListProductsQueryKey().
+  const invalidateList = () => qc.invalidateQueries({ queryKey: getListProductsQueryKey() });
+
+  const setDeleteConfirm = (id: string | null) => {
+    setActionError(null);
+    setDeleteConfirmRaw(id);
+  };
+
+  const deleteProduct = useDeleteProduct({
+    mutation: {
+      onSuccess: () => {
+        invalidateList();
+        setDeleteConfirmRaw(null);
+        setActionError(null);
+      },
+      onError: (err: unknown) => {
+        setActionError(extractErrorMessage(err));
+      },
+    },
+  });
+  const reactivateProduct = useReactivateProduct({
+    mutation: {
+      onSuccess: () => {
+        invalidateList();
+        setActionError(null);
+      },
+      onError: (err: unknown) => {
+        setActionError(extractErrorMessage(err));
+      },
     },
   });
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", code: "", description: "" });
+    setForm({ name: "", code: "", description: "", dosage: "", pharmaceuticalForm: "" });
+    setActionError(null);
     setOpen(true);
   };
-  const openEdit = (p: { id: string; name: string; code: string; description?: string | null }) => {
+  const openEdit = (p: ProductRow) => {
     setEditing(p.id);
-    setForm({ name: p.name, code: p.code, description: p.description ?? "" });
+    setForm({
+      name: p.name,
+      code: p.code,
+      description: p.description ?? "",
+      dosage: p.dosage ?? "",
+      pharmaceuticalForm: p.pharmaceuticalForm ?? "",
+    });
+    setActionError(null);
     setOpen(true);
   };
   const handleSave = async () => {
+    setActionError(null);
+    // Empty strings -> undefined for both create and update. CreateProductBody
+    // and UpdateProductBody both mark dosage / pharmaceuticalForm as optional
+    // strings, so omitting the key is the canonical "no value" / "leave as-is".
     const payload = {
       name: form.name,
       code: form.code,
       description: form.description || undefined,
+      dosage: form.dosage || undefined,
+      pharmaceuticalForm: form.pharmaceuticalForm || undefined,
     };
-    if (editing) await updateProduct.mutateAsync({ id: editing, data: payload });
-    else await createProduct.mutateAsync({ data: payload });
-    qc.invalidateQueries({ queryKey: getListProductsQueryKey() });
-    setOpen(false);
+    try {
+      if (editing) await updateProduct.mutateAsync({ id: editing, data: payload });
+      else await createProduct.mutateAsync({ data: payload });
+      invalidateList();
+      setOpen(false);
+    } catch (err) {
+      setActionError(extractErrorMessage(err));
+    }
   };
 
   return (
@@ -841,11 +905,22 @@ function ProductsTab() {
         onAdd={openCreate}
         addLabel="Nouveau produit"
       />
+      <div className="flex items-center justify-between border border-border rounded-lg px-4 py-2">
+        <Label htmlFor="products-include-inactive" className="text-sm">
+          Afficher les inactifs
+        </Label>
+        <Switch
+          id="products-include-inactive"
+          checked={includeInactive}
+          onCheckedChange={setIncludeInactive}
+        />
+      </div>
+      {actionError && <p className="text-xs text-red-500">{actionError}</p>}
       <TableWrapper>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40">
-              {["Code", "Nom", "Description", "Actif", ""].map((h) => (
+              {["Code", "Nom", "Dosage", "Forme", "Description", "Statut", ""].map((h) => (
                 <th
                   key={h}
                   className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase"
@@ -856,75 +931,91 @@ function ProductsTab() {
             </tr>
           </thead>
           <tbody>
-            {products?.map(
-              (p: {
-                id: string;
-                name: string;
-                code: string;
-                description?: string | null;
-                isActive: boolean;
-              }) => (
-                <tr
-                  key={p.id}
-                  className="border-b border-border/50 hover:bg-muted/30 transition-colors"
-                >
-                  <td className="px-4 py-3 font-mono text-xs font-bold">{p.code}</td>
-                  <td className="px-4 py-3 font-medium">{p.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs max-w-[180px] truncate">
-                    {p.description}
-                  </td>
-                  <td className="px-4 py-3">
-                    {p.isActive ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
+            {products?.map((p: ProductRow) => (
+              <tr
+                key={p.id}
+                className="border-b border-border/50 hover:bg-muted/30 transition-colors"
+              >
+                <td className="px-4 py-3 font-mono text-xs font-bold">{p.code}</td>
+                <td className="px-4 py-3 font-medium">{p.name}</td>
+                <td className="px-4 py-3 text-muted-foreground text-xs">{p.dosage ?? "—"}</td>
+                <td className="px-4 py-3 text-muted-foreground text-xs">
+                  {p.pharmaceuticalForm ?? "—"}
+                </td>
+                <td className="px-4 py-3 text-muted-foreground text-xs max-w-[180px] truncate">
+                  {p.description}
+                </td>
+                <td className="px-4 py-3">
+                  <StatusBadge active={p.isActive} />
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex justify-end items-center gap-1">
+                    {!p.isActive ? (
+                      <button
+                        title="Réactiver"
+                        className="h-9 px-2.5 flex items-center gap-1 rounded-lg text-sky-500 hover:bg-sky-500/10 text-xs font-medium"
+                        onClick={() => {
+                          setActionError(null);
+                          reactivateProduct.mutate({ id: p.id });
+                        }}
+                      >
+                        <RefreshCw className="h-4 w-4" /> Réactiver
+                      </button>
+                    ) : deleteConfirm === p.id ? (
+                      <>
+                        <span className="text-xs text-red-400 mr-1">Désactiver ?</span>
+                        <button
+                          className="h-8 px-2.5 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600"
+                          onClick={() => {
+                            setActionError(null);
+                            deleteProduct.mutate({ id: p.id });
+                          }}
+                        >
+                          Oui
+                        </button>
+                        <button
+                          className="h-8 px-2.5 rounded-lg border border-border text-xs hover:bg-muted"
+                          onClick={() => setDeleteConfirm(null)}
+                        >
+                          Non
+                        </button>
+                      </>
                     ) : (
-                      <XCircle className="h-4 w-4 text-muted-foreground" />
+                      <>
+                        <button
+                          className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted"
+                          onClick={() => {
+                            setActionError(null);
+                            openEdit(p);
+                          }}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button
+                          className="h-9 w-9 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-500/10"
+                          onClick={() => setDeleteConfirm(p.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </>
                     )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end items-center gap-1">
-                      {deleteConfirm === p.id ? (
-                        <>
-                          <span className="text-xs text-red-400 mr-1">Désactiver ?</span>
-                          <button
-                            className="h-8 px-2.5 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600"
-                            onClick={() => deleteProduct.mutate(p.id)}
-                          >
-                            Oui
-                          </button>
-                          <button
-                            className="h-8 px-2.5 rounded-lg border border-border text-xs hover:bg-muted"
-                            onClick={() => setDeleteConfirm(null)}
-                          >
-                            Non
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            className="h-9 w-9 flex items-center justify-center rounded-lg hover:bg-muted"
-                            onClick={() => openEdit(p)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          {p.isActive && (
-                            <button
-                              className="h-9 w-9 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-500/10"
-                              onClick={() => setDeleteConfirm(p.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ),
-            )}
+                  </div>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </TableWrapper>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(v) => {
+          // Closing the dialog (Annuler / Escape / overlay click) must clear
+          // the shared actionError so a stale handleSave error does not bleed
+          // into the table-level error slot above the products table.
+          if (!v) setActionError(null);
+          setOpen(v);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editing ? "Modifier" : "Nouveau"} produit</DialogTitle>
@@ -934,6 +1025,8 @@ function ProductsTab() {
               { l: "Nom", k: "name" },
               { l: "Code", k: "code" },
               { l: "Description", k: "description" },
+              { l: "Dosage", k: "dosage" },
+              { l: "Forme pharmaceutique", k: "pharmaceuticalForm" },
             ].map(({ l, k }) => (
               <div key={k} className="space-y-1.5">
                 <Label>{l}</Label>
@@ -944,9 +1037,17 @@ function ProductsTab() {
                 />
               </div>
             ))}
+            {actionError && <p className="text-xs text-red-500">{actionError}</p>}
           </div>
           <DialogFooter>
-            <Button variant="outline" className="h-11" onClick={() => setOpen(false)}>
+            <Button
+              variant="outline"
+              className="h-11"
+              onClick={() => {
+                setActionError(null);
+                setOpen(false);
+              }}
+            >
               Annuler
             </Button>
             <Button className="h-11 bg-sky-500 hover:bg-sky-400 text-white" onClick={handleSave}>

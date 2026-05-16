@@ -1469,6 +1469,10 @@ components:
           type: string
         description:
           type: ["string", "null"]
+        dosage:
+          type: ["string", "null"]
+        pharmaceuticalForm:
+          type: ["string", "null"]
         isActive:
           type: boolean
         createdAt:
@@ -1485,6 +1489,10 @@ components:
           type: string
         description:
           type: string
+        dosage:
+          type: string
+        pharmaceuticalForm:
+          type: string
       required: [name, code]
 
     UpdateProductBody:
@@ -1495,6 +1503,10 @@ components:
         code:
           type: string
         description:
+          type: string
+        dosage:
+          type: string
+        pharmaceuticalForm:
           type: string
         isActive:
           type: boolean
