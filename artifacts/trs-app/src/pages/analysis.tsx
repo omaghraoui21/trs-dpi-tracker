@@ -3,6 +3,7 @@ import {
   useListProductionEntries,
   useListEquipments,
   useGetDowntimePareto,
+  customFetch,
 } from "@workspace/api-client-react";
 import type { ProductionEntryWithDetails, DowntimeParetoItem } from "@workspace/api-client-react";
 import {
@@ -53,7 +54,6 @@ const MONTHS = [
   "Novembre",
   "Décembre",
 ];
-import { customFetch } from "@workspace/api-client-react";
 
 const FAMILLE_COLORS: Record<string, string> = {
   "Arrêts non planifiés": "#ef4444",

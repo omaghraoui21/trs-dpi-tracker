@@ -9,6 +9,7 @@ import {
   useSubmitProductionEntry,
   useListProductionEntries,
   getListProductionEntriesQueryKey,
+  customFetch,
 } from "@workspace/api-client-react";
 import type { ProductionEntryWithDetails } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -145,7 +146,6 @@ const QUICK_DT_CODES: Record<string, string[]> = {
   A28: ["AB", "CHG_ALU", "CHG_PVC", "NET_MIN_EQ"],
 };
 const FALLBACK_DT_CODES = ["ATTENTE-MAT", "NET_MIN_EQ", "PAUSE", "CHSG"];
-import { customFetch } from "@workspace/api-client-react";
 
 function fmtCadence(c: number, cfg: EquipCfg): string {
   if (c <= 0) return "—";

@@ -17,11 +17,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
-  const { data: user, isLoading: isUserLoading, refetch } = useGetCurrentUser({
+  const {
+    data: user,
+    isLoading: isUserLoading,
+    refetch,
+  } = useGetCurrentUser({
     query: {
       retry: false,
       queryKey: ["auth", "me"],
-    }
+      staleTime: 5 * 60 * 1000,
+    },
   });
 
   const loginMutation = useLogin();

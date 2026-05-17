@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
-  const { login, isLoading } = useAuth();
+  const { login } = useAuth();
   const [, setLocation] = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,7 +40,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-5">
       <div className="w-full max-w-sm space-y-6">
-
         {/* Brand */}
         <div className="text-center space-y-3">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-sky-500/10 border border-sky-500/20">
@@ -66,12 +65,14 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-slate-300 text-sm">Email professionnel</Label>
+              <Label htmlFor="email" className="text-slate-300 text-sm">
+                Email professionnel
+              </Label>
               <Input
                 id="email"
                 type="email"
                 value={email}
-                onChange={e => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
                 placeholder="prenom.nom@dpi.local"
                 required
                 autoFocus={!email}
@@ -81,13 +82,15 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-slate-300 text-sm">Mot de passe</Label>
+              <Label htmlFor="password" className="text-slate-300 text-sm">
+                Mot de passe
+              </Label>
               <div className="relative">
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
                   autoFocus={!!email}
@@ -96,7 +99,7 @@ export default function LoginPage() {
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword(s => !s)}
+                  onClick={() => setShowPassword((s) => !s)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
                   aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
                 >
@@ -107,7 +110,7 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              disabled={submitting || isLoading || !email || !password}
+              disabled={submitting || !email || !password}
               className="w-full bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-white font-semibold h-12 text-base mt-2 transition-all disabled:opacity-50"
             >
               {submitting ? (
@@ -115,7 +118,9 @@ export default function LoginPage() {
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   Connexion...
                 </span>
-              ) : "Se connecter"}
+              ) : (
+                "Se connecter"
+              )}
             </Button>
           </form>
         </div>

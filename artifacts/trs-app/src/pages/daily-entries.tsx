@@ -35,10 +35,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { useListEquipments } from "@workspace/api-client-react";
+import { useListEquipments, customFetch } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
-
-import { customFetch } from "@workspace/api-client-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
