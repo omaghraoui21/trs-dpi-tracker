@@ -18,11 +18,13 @@ Navigateur → Vercel (React SPA) → Railway (Express API) → Supabase (Postgr
 ### Récupérer les credentials
 
 Dans **Settings > Database** :
+
 - **Connection string > URI** → valeur pour `DATABASE_URL`
   - Utiliser le **Session mode pooler** (port `5432`)
   - ⚠ NE PAS utiliser Transaction mode (port `6543`) — Drizzle nécessite la session affinity
 
 Dans **Settings > API** :
+
 - **Project URL** → `SUPABASE_URL`
 - **anon public** → `SUPABASE_ANON_KEY`
 - **service_role** → `SUPABASE_SERVICE_ROLE_KEY` (backend uniquement, jamais dans Vercel)
@@ -66,16 +68,17 @@ pnpm --filter @workspace/scripts run seed-prod
 
 Dans **Railway > Variables**, ajouter :
 
-| Variable | Valeur |
-|----------|--------|
-| `NODE_ENV` | `production` |
-| `PORT` | `8080` |
-| `DATABASE_URL` | `postgresql://postgres.[ID]:[PWD]@...supabase.com:5432/postgres` |
-| `SESSION_SECRET` | `openssl rand -hex 32` (64 chars hex) |
-| `ALLOWED_ORIGINS` | `https://[ton-app].vercel.app` (à remplir après déploiement Vercel) |
-| `SUPABASE_URL` | `https://[PROJECT-ID].supabase.co` |
-| `SUPABASE_ANON_KEY` | `eyJ...` |
-| `SUPABASE_SERVICE_ROLE_KEY` | `eyJ...` (secret) |
+| Variable                    | Valeur                                                              |
+| --------------------------- | ------------------------------------------------------------------- |
+| `NODE_ENV`                  | `production`                                                        |
+| `PORT`                      | `8080`                                                              |
+| `DATABASE_URL`              | `postgresql://postgres.[ID]:[PWD]@...supabase.com:5432/postgres`    |
+| `SESSION_SECRET`            | `openssl rand -hex 32` (64 chars hex)                               |
+| `ALLOWED_ORIGINS`           | `https://[ton-app].vercel.app` (à remplir après déploiement Vercel) |
+| `COOKIE_SAMESITE`           | `none` — **requis** pour auth cross-origin Vercel→Railway           |
+| `SUPABASE_URL`              | `https://[PROJECT-ID].supabase.co`                                  |
+| `SUPABASE_ANON_KEY`         | `eyJ...`                                                            |
+| `SUPABASE_SERVICE_ROLE_KEY` | `eyJ...` (secret)                                                   |
 
 4. Une fois déployé, noter l'URL Railway : `https://[app].up.railway.app`
 5. Vérifier : `curl https://[app].up.railway.app/api/healthz` → `{"status":"ok"}`
@@ -92,8 +95,8 @@ Dans **Railway > Variables**, ajouter :
 
 Dans **Vercel > Settings > Environment Variables**, ajouter :
 
-| Variable | Valeur | Scope |
-|----------|--------|-------|
+| Variable            | Valeur                         | Scope      |
+| ------------------- | ------------------------------ | ---------- |
 | `VITE_API_BASE_URL` | `https://[app].up.railway.app` | Production |
 
 > ⚠ `VITE_API_BASE_URL` est injectée dans le bundle JS. Ne jamais y mettre de secret.
@@ -145,11 +148,11 @@ curl -X POST https://[app].up.railway.app/api/auth/login \
 
 ## Récapitulatif des URLs
 
-| Service | URL |
-|---------|-----|
-| Frontend | `https://[app].vercel.app` |
-| Backend API | `https://[app].up.railway.app/api` |
-| Health check | `https://[app].up.railway.app/api/healthz` |
+| Service            | URL                                                   |
+| ------------------ | ----------------------------------------------------- |
+| Frontend           | `https://[app].vercel.app`                            |
+| Backend API        | `https://[app].up.railway.app/api`                    |
+| Health check       | `https://[app].up.railway.app/api/healthz`            |
 | Supabase Dashboard | `https://supabase.com/dashboard/project/[PROJECT-ID]` |
 
 ---
@@ -165,10 +168,11 @@ curl -X POST https://[app].up.railway.app/api/auth/login \
 **Build Vercel échoue**
 → Vérifier que `pnpm run build:frontend` passe en local sans `PORT` ni `BASE_PATH`
 
-**Login renvoie 401**
+**Login renvoie 401 puis toutes les requêtes retournent 401**
+→ Cookie cross-origin non envoyé. Vérifier que `COOKIE_SAMESITE=none` est défini dans Railway (Railway = backend, pas Vercel). Le cookie HttpOnly nécessite `SameSite=None; Secure` pour traverser les domaines Vercel→Railway.
+
+**Login renvoie 401 (mauvais identifiants)**
 → Le seed n'a pas été exécuté, ou les mots de passe ne correspondent pas. Re-lancer `seed-prod`
-
-
 
 ---
 
@@ -183,6 +187,7 @@ Après le premier déploiement ou lors d'une mise à jour, exécuter dans **Supa
 Ces index sont CONCURRENTLY — non-bloquants, peuvent tourner en prod sans downtime.
 
 **Pourquoi ces index ?**
+
 - `idx_monthly_closures_period` — `/api/monthly-closures?year=` sans scan séquentiel
 - `idx_cadences_equipment` — lookup cadences par équipement dans les calculs TRS
 - `idx_daily_entries_equipment_date` — requêtes mensuelles dashboard (getDailyBase)

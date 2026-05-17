@@ -39,25 +39,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useListEquipments } from "@workspace/api-client-react";
 
-const BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
-
-function apiHeaders(): Record<string, string> {
-  return { "Content-Type": "application/json" };
-}
-
-async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...opts,
-    credentials: "include",
-    headers: { ...apiHeaders(), ...(opts.headers ?? {}) },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error ?? res.statusText);
-  }
-  if (res.status === 204) return undefined as T;
-  return res.json();
-}
+import { customFetch } from "@workspace/api-client-react";
 
 export type CalendarEventType =
   | "CLOSURE"
@@ -633,12 +615,12 @@ export default function CalendarPage() {
 
   const { data: events = [], isLoading } = useQuery<CalendarEvent[]>({
     queryKey: ["calendar-events", year],
-    queryFn: () => apiFetch(`/api/calendar-events?year=${year}`),
+    queryFn: () => customFetch(`/api/calendar-events?year=${year}`),
   });
 
   const { data: impact } = useQuery<CalendarImpact>({
     queryKey: ["calendar-events-impact", year, month],
-    queryFn: () => apiFetch(`/api/calendar-events/impact?year=${year}&month=${month}`),
+    queryFn: () => customFetch(`/api/calendar-events/impact?year=${year}&month=${month}`),
   });
 
   const monthEvents = useMemo(() => {
@@ -664,7 +646,7 @@ export default function CalendarPage() {
 
   const createMutation = useMutation({
     mutationFn: (form: EventForm) =>
-      apiFetch<CalendarEvent>("/api/calendar-events", {
+      customFetch<CalendarEvent>("/api/calendar-events", {
         method: "POST",
         body: JSON.stringify({
           eventType: form.eventType,
@@ -694,7 +676,7 @@ export default function CalendarPage() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, form }: { id: string; form: EventForm }) =>
-      apiFetch<CalendarEvent>(`/api/calendar-events/${id}`, {
+      customFetch<CalendarEvent>(`/api/calendar-events/${id}`, {
         method: "PATCH",
         body: JSON.stringify({
           eventType: form.eventType,
@@ -724,7 +706,8 @@ export default function CalendarPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => apiFetch<void>(`/api/calendar-events/${id}`, { method: "DELETE" }),
+    mutationFn: (id: string) =>
+      customFetch<void>(`/api/calendar-events/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["calendar-events"] });
       qc.invalidateQueries({ queryKey: ["calendar-events-impact"] });
