@@ -37,9 +37,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { useListEquipments } from "@workspace/api-client-react";
-
-import { customFetch } from "@workspace/api-client-react";
+import { useListEquipments, customFetch } from "@workspace/api-client-react";
 
 export type CalendarEventType =
   | "CLOSURE"
