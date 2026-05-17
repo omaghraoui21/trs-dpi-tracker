@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "wouter";
 import { Activity, AlertCircle, Eye, EyeOff } from "lucide-react";
@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   // Remember last email
   useEffect(() => {
@@ -23,11 +24,16 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Read actual DOM values — iOS Safari autofill may not trigger onChange,
+    // so React state can be stale while the field visually shows a value.
+    const fd = new FormData(formRef.current!);
+    const emailVal = (fd.get("email") as string | null) ?? email;
+    const passwordVal = (fd.get("password") as string | null) ?? password;
     setError(null);
     setSubmitting(true);
     try {
-      localStorage.setItem("dpi_last_email", email);
-      await login({ email: email.trim().toLowerCase(), password });
+      localStorage.setItem("dpi_last_email", emailVal);
+      await login({ email: emailVal.trim().toLowerCase(), password: passwordVal });
       setLocation("/");
     } catch {
       setError("Email ou mot de passe incorrect. Vérifiez vos identifiants.");
@@ -63,16 +69,18 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form ref={formRef} onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email" className="text-slate-300 text-sm">
                 Email professionnel
               </Label>
               <Input
                 id="email"
+                name="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onInput={(e) => setEmail((e.target as HTMLInputElement).value)}
                 placeholder="prenom.nom@dpi.local"
                 required
                 autoFocus={!email}
@@ -88,9 +96,11 @@ export default function LoginPage() {
               <div className="relative">
                 <Input
                   id="password"
+                  name="password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onInput={(e) => setPassword((e.target as HTMLInputElement).value)}
                   placeholder="••••••••"
                   required
                   autoFocus={!!email}
