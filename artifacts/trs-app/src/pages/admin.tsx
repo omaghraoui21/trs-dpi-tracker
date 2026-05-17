@@ -15,7 +15,11 @@ import {
   useDeleteProduct,
   useReactivateProduct,
   useListCadences,
-  useUpsertCadence,
+  useCreateCadence,
+  useReactivateCadence,
+  useDeleteCadence,
+  useValidateCadence,
+  useListProductPresentations,
   useListDowntimeCategories,
   useCreateDowntimeCategory,
   useUpdateDowntimeCategory,
@@ -1064,33 +1068,86 @@ export function ProductsTab() {
 }
 
 // ─── Cadences Tab ──────────────────────────────────────────
-function CadencesTab() {
+export function CadencesTab() {
   const qc = useQueryClient();
-  const { data: cadences } = useListCadences({});
+  const [includeInactive, setIncludeInactive] = useState(false);
+  const { data: cadences } = useListCadences({ includeInactive });
   const { data: products } = useListProducts();
   const { data: equipments } = useListEquipments();
-  const upsertCadence = useUpsertCadence();
+  const createCadenceMut = useCreateCadence();
+  const reactivateMut = useReactivateCadence();
+  const deleteMut = useDeleteCadence();
+  const validateMut = useValidateCadence();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     productId: "",
     equipmentId: "",
+    presentationId: "",
     theoreticalCadence: "",
     validatedCadence: "",
     unit: "units/hour",
+    notes: "",
+  });
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const { data: presentations } = useListProductPresentations(form.productId, {
+    query: { enabled: !!form.productId },
   });
 
+  const invalidateList = () => qc.invalidateQueries({ queryKey: getListCadencesQueryKey() });
+
   const handleSave = async () => {
-    await upsertCadence.mutateAsync({
-      data: {
-        productId: form.productId,
-        equipmentId: form.equipmentId,
-        theoreticalCadence: Number(form.theoreticalCadence),
-        validatedCadence: Number(form.validatedCadence),
-        unit: form.unit,
-      },
-    });
-    qc.invalidateQueries({ queryKey: getListCadencesQueryKey({}) });
-    setOpen(false);
+    setFormError(null);
+    try {
+      await createCadenceMut.mutateAsync({
+        data: {
+          productId: form.productId,
+          equipmentId: form.equipmentId,
+          presentationId: form.presentationId,
+          theoreticalCadence: Number(form.theoreticalCadence),
+          validatedCadence: Number(form.validatedCadence),
+          unit: form.unit || undefined,
+          notes: form.notes || undefined,
+        },
+      });
+      invalidateList();
+      setOpen(false);
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string; reason?: string } }; message?: string };
+      const msg =
+        error?.response?.data?.error ||
+        error?.response?.data?.reason ||
+        error?.message ||
+        "Erreur lors de la creation";
+      setFormError(msg);
+    }
+  };
+
+  const handleReactivate = async (id: string) => {
+    try {
+      await reactivateMut.mutateAsync({ id });
+      invalidateList();
+    } catch {
+      // silent
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteMut.mutateAsync({ id });
+      invalidateList();
+    } catch {
+      // silent
+    }
+  };
+
+  const handleValidate = async (id: string) => {
+    try {
+      await validateMut.mutateAsync({ id });
+      invalidateList();
+    } catch {
+      // silent
+    }
   };
 
   return (
@@ -1102,17 +1159,24 @@ function CadencesTab() {
           setForm({
             productId: "",
             equipmentId: "",
+            presentationId: "",
             theoreticalCadence: "",
             validatedCadence: "",
             unit: "units/hour",
+            notes: "",
           });
+          setFormError(null);
           setOpen(true);
         }}
         addLabel="Nouvelle cadence"
       />
+      <div className="flex items-center gap-2 text-sm">
+        <Switch checked={includeInactive} onCheckedChange={setIncludeInactive} />
+        <span className="text-muted-foreground">Afficher les inactifs</span>
+      </div>
       <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-2.5 text-xs text-amber-400">
-        ℹ️ La modification crée une nouvelle version horodatée — l'historique des cadences est
-        conservé (NF E 60-182)
+        La modification cree une nouvelle version horodatee - l'historique des cadences est
+        conserve (NF E 60-182)
       </div>
       <TableWrapper>
         <table className="w-full text-sm">
@@ -1120,11 +1184,14 @@ function CadencesTab() {
             <tr className="border-b border-border bg-muted/40">
               {[
                 "Produit",
-                "Équipement",
-                "Cadence théorique",
-                "Cadence validée",
-                "Unité",
-                "Active",
+                "Equipement",
+                "Presentation",
+                "Cadence theorique",
+                "Cadence validee",
+                "Unite",
+                "Statut",
+                "Validee",
+                "Actions",
               ].map((h) => (
                 <th
                   key={h}
@@ -1141,12 +1208,15 @@ function CadencesTab() {
                 id: string;
                 productId: string;
                 equipmentId: string;
-                productName?: string;
-                equipmentName?: string;
+                presentationId?: string | null;
+                productName?: string | null;
+                equipmentName?: string | null;
+                presentationName?: string | null;
                 theoreticalCadence: number;
                 validatedCadence: number;
                 unit: string;
-                isActive?: boolean;
+                isActive: boolean;
+                validatedAt?: string | null;
               }) => (
                 <tr
                   key={c.id}
@@ -1154,6 +1224,7 @@ function CadencesTab() {
                 >
                   <td className="px-4 py-3 whitespace-nowrap">{c.productName}</td>
                   <td className="px-4 py-3 whitespace-nowrap">{c.equipmentName}</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs">{c.presentationName || "-"}</td>
                   <td className="px-4 py-3 tabular-nums">
                     {c.theoreticalCadence.toLocaleString()}
                   </td>
@@ -1162,11 +1233,58 @@ function CadencesTab() {
                   </td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">{c.unit}</td>
                   <td className="px-4 py-3">
-                    {c.isActive !== false ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    {c.isActive ? (
+                      <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Actif</Badge>
                     ) : (
-                      <XCircle className="h-4 w-4 text-muted-foreground" />
+                      <Badge variant="secondary" className="text-muted-foreground">Inactif</Badge>
                     )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {c.validatedAt ? (
+                      <span className="flex items-center gap-1 text-xs text-green-400">
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        {new Date(c.validatedAt).toLocaleDateString("fr-FR")}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">-</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      {!c.validatedAt && c.isActive && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title="Valider"
+                          onClick={() => handleValidate(c.id)}
+                        >
+                          <ShieldCheck className="h-4 w-4 text-sky-400" />
+                        </Button>
+                      )}
+                      {!c.isActive && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title="Reactiver"
+                          onClick={() => handleReactivate(c.id)}
+                        >
+                          <Play className="h-4 w-4 text-green-400" />
+                        </Button>
+                      )}
+                      {c.isActive && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title="Desactiver"
+                          onClick={() => handleDelete(c.id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-400" />
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ),
@@ -1177,17 +1295,17 @@ function CadencesTab() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cadence produit/équipement</DialogTitle>
+            <DialogTitle>Nouvelle cadence</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1.5">
               <Label>Produit</Label>
               <Select
                 value={form.productId}
-                onValueChange={(v) => setForm((f) => ({ ...f, productId: v }))}
+                onValueChange={(v) => setForm((f) => ({ ...f, productId: v, presentationId: "" }))}
               >
                 <SelectTrigger className="h-11">
-                  <SelectValue placeholder="Sélectionner..." />
+                  <SelectValue placeholder="Selectionner..." />
                 </SelectTrigger>
                 <SelectContent>
                   {products?.map((p: { id: string; name: string }) => (
@@ -1199,13 +1317,13 @@ function CadencesTab() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Équipement</Label>
+              <Label>Equipement</Label>
               <Select
                 value={form.equipmentId}
                 onValueChange={(v) => setForm((f) => ({ ...f, equipmentId: v }))}
               >
                 <SelectTrigger className="h-11">
-                  <SelectValue placeholder="Sélectionner..." />
+                  <SelectValue placeholder="Selectionner..." />
                 </SelectTrigger>
                 <SelectContent>
                   {equipments?.map((e: { id: string; name: string }) => (
@@ -1216,21 +1334,64 @@ function CadencesTab() {
                 </SelectContent>
               </Select>
             </div>
-            {[
-              { l: "Cadence théorique (u/h)", k: "theoreticalCadence" },
-              { l: "Cadence validée (u/h)", k: "validatedCadence" },
-              { l: "Unité", k: "unit" },
-            ].map(({ l, k }) => (
-              <div key={k} className="space-y-1.5">
-                <Label>{l}</Label>
-                <Input
-                  type={k.includes("Cadence") ? "number" : "text"}
-                  value={form[k as keyof typeof form]}
-                  onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))}
-                  className="h-11"
-                />
-              </div>
-            ))}
+            <div className="space-y-1.5">
+              <Label>Presentation</Label>
+              <Select
+                value={form.presentationId}
+                onValueChange={(v) => setForm((f) => ({ ...f, presentationId: v }))}
+                disabled={!form.productId}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder={form.productId ? "Selectionner..." : "Choisir un produit d'abord"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {presentations?.map((p: { id: string; presentationName: string }) => (
+                    <SelectItem key={p.id} value={p.id} className="py-3">
+                      {p.presentationName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Cadence theorique (u/h)</Label>
+              <Input
+                type="number"
+                value={form.theoreticalCadence}
+                onChange={(e) => setForm((f) => ({ ...f, theoreticalCadence: e.target.value }))}
+                className="h-11"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Cadence validee (u/h)</Label>
+              <Input
+                type="number"
+                value={form.validatedCadence}
+                onChange={(e) => setForm((f) => ({ ...f, validatedCadence: e.target.value }))}
+                className="h-11"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Unite</Label>
+              <Input
+                type="text"
+                value={form.unit}
+                onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))}
+                className="h-11"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Notes</Label>
+              <Input
+                type="text"
+                value={form.notes}
+                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                className="h-11"
+              />
+            </div>
+            {formError && (
+              <p className="text-sm text-red-500">{formError}</p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" className="h-11" onClick={() => setOpen(false)}>

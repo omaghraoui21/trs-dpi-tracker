@@ -173,6 +173,9 @@ async function buildEntriesWithDetails(entryIds: string[]) {
   return entries.map((entry: EntryRow) => {
     const downtimeRows = downtimesByEntry.get(entry.id) ?? [];
     const cadence = allCadences.find(
+      // Phase 5 limitation: matches by (productId, equipmentId) pair only.
+      // Triplet-aware lookup (with presentationId) deferred to Phase 6 when
+      // production_entries gains a presentation_id column.
       c => c.productId === entry.productId && c.equipmentId === entry.equipmentId
     );
     const validatedCadence = cadence ? parseFloat(cadence.validatedCadence as unknown as string) : 0;

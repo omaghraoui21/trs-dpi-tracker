@@ -153,6 +153,8 @@ export interface Cadence {
   id: string;
   productId: string;
   equipmentId: string;
+  /** @nullable */
+  presentationId?: string | null;
   /** Theoretical cadence (units/hour) */
   theoreticalCadence: number;
   /** Validated product cadence (units/hour) */
@@ -160,17 +162,58 @@ export interface Cadence {
   /** Unit (blisters/min, capsules/min, etc.) */
   unit: string;
   /** @nullable */
+  validatedAt?: string | null;
+  /** @nullable */
+  validatedBy?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  /** @nullable */
   productName?: string | null;
   /** @nullable */
   equipmentName?: string | null;
+  /** @nullable */
+  presentationName?: string | null;
 }
 
-export interface UpsertCadenceBody {
+export interface CreateCadenceBody {
   productId: string;
   equipmentId: string;
+  presentationId: string;
   theoreticalCadence: number;
   validatedCadence: number;
+  unit?: string;
+  notes?: string;
+}
+
+export interface ProductPresentation {
+  id: string;
+  productId: string;
+  presentationName: string;
+  presentationType: string;
   unit: string;
+  /** @nullable */
+  unitsPerBox?: number | null;
+  /** @nullable */
+  blistersPerBox?: number | null;
+  /** @nullable */
+  capsulesPerBlister?: number | null;
+  isCombiforComponent: boolean;
+  isCombiforFinishedProduct: boolean;
+  needsConfirmation: boolean;
+  validationStatus: string;
+  /** @nullable */
+  comment?: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrsError {
+  reason: string;
+  message: string;
 }
 
 /**
@@ -450,7 +493,10 @@ export type ProductionEntryWithDetails = ProductionEntry & {
   /** @nullable */
   operatorName?: string | null;
   downtimeEvents?: DowntimeEvent[];
-  trsMetrics?: TrsMetrics;
+  /** @nullable */
+  trsMetrics?: TrsMetrics | null;
+  /** @nullable */
+  trsError?: TrsError | null;
 };
 
 export interface CreateProductionEntryBody {
@@ -794,6 +840,12 @@ export type ListProductsParams = {
 export type ListCadencesParams = {
   productId?: string;
   equipmentId?: string;
+  presentationId?: string;
+  includeInactive?: boolean;
+};
+
+export type ListProductPresentationsParams = {
+  id: string;
 };
 
 export type ListDowntimeCategoriesParams = {

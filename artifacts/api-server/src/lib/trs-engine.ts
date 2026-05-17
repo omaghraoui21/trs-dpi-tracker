@@ -176,6 +176,11 @@ export function calculateMonthlyTrs(inputs: MonthlyTrsInputs) {
 
 // ─── Safe TRS calculation (Phase 5) ──────────────────────────────────────────
 
+/**
+ * Typed error for missing/invalid cadence scenarios.
+ * Available for throw-based error patterns in routes that prefer try/catch
+ * over the safe-wrapper approach used by calculateTrsSafe.
+ */
 export class MissingCadenceError extends Error {
   reason: string;
   constructor(reason: string) {

@@ -18,6 +18,8 @@ tags:
     description: Equipment management
   - name: products
     description: Product management
+  - name: cadences
+    description: Cadence management
   - name: downtime-categories
     description: Downtime category management
   - name: production-entries
@@ -448,7 +450,7 @@ paths:
   /cadences:
     get:
       operationId: listCadences
-      tags: [products]
+      tags: [cadences]
       summary: List cadences by product and equipment
       parameters:
         - name: productId
@@ -461,6 +463,16 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: presentationId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: includeInactive
+          in: query
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
           description: List of cadences
@@ -471,22 +483,128 @@ paths:
                 items:
                   $ref: "#/components/schemas/Cadence"
     post:
-      operationId: upsertCadence
-      tags: [products]
-      summary: Create or update a cadence
+      operationId: createCadence
+      tags: [cadences]
+      summary: Create a cadence
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpsertCadenceBody"
+              $ref: "#/components/schemas/CreateCadenceBody"
       responses:
-        "200":
-          description: Cadence upserted
+        "201":
+          description: Cadence created
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Cadence"
+        "400":
+          description: Validation error (e.g. presentation/product mismatch)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConflictError"
+        "409":
+          description: Conflict - active cadence already exists for this triplet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConflictError"
+
+  /cadences/{id}/reactivate:
+    post:
+      operationId: reactivateCadence
+      tags: [cadences]
+      summary: Reactivate an inactive cadence
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Cadence reactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cadence"
+        "409":
+          description: Conflict - active cadence exists for this triplet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConflictError"
+        "404":
+          description: Cadence not found
+
+  /cadences/{id}:
+    delete:
+      operationId: deleteCadence
+      tags: [cadences]
+      summary: Deactivate a cadence (soft delete)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Cadence deactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cadence"
+        "404":
+          description: Cadence not found
+
+  /cadences/{id}/validate:
+    post:
+      operationId: validateCadence
+      tags: [cadences]
+      summary: Mark cadence as validated
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Cadence validated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cadence"
+        "404":
+          description: Cadence not found
+
+  /products/{id}/presentations:
+    get:
+      operationId: listProductPresentations
+      tags: [products]
+      summary: List presentations for a product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: List of product presentations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductPresentation"
 
   # Downtime categories
   /downtime-categories:
@@ -1524,6 +1642,9 @@ components:
         equipmentId:
           type: string
           format: uuid
+        presentationId:
+          type: ["string", "null"]
+          format: uuid
         theoreticalCadence:
           type: number
           description: Theoretical cadence (units/hour)
@@ -1533,13 +1654,31 @@ components:
         unit:
           type: string
           description: Unit (blisters/min, capsules/min, etc.)
+        validatedAt:
+          type: ["string", "null"]
+          format: date-time
+        validatedBy:
+          type: ["string", "null"]
+          format: uuid
+        notes:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
         productName:
           type: ["string", "null"]
         equipmentName:
           type: ["string", "null"]
-      required: [id, productId, equipmentId, theoreticalCadence, validatedCadence, unit]
+        presentationName:
+          type: ["string", "null"]
+      required: [id, productId, equipmentId, theoreticalCadence, validatedCadence, unit, isActive]
 
-    UpsertCadenceBody:
+    CreateCadenceBody:
       type: object
       properties:
         productId:
@@ -1548,13 +1687,68 @@ components:
         equipmentId:
           type: string
           format: uuid
+        presentationId:
+          type: string
+          format: uuid
         theoreticalCadence:
           type: number
         validatedCadence:
           type: number
         unit:
           type: string
-      required: [productId, equipmentId, theoreticalCadence, validatedCadence, unit]
+        notes:
+          type: string
+      required: [productId, equipmentId, presentationId, theoreticalCadence, validatedCadence]
+
+    ProductPresentation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        presentationName:
+          type: string
+        presentationType:
+          type: string
+        unit:
+          type: string
+        unitsPerBox:
+          type: ["integer", "null"]
+        blistersPerBox:
+          type: ["integer", "null"]
+        capsulesPerBlister:
+          type: ["integer", "null"]
+        isCombiforComponent:
+          type: boolean
+        isCombiforFinishedProduct:
+          type: boolean
+        needsConfirmation:
+          type: boolean
+        validationStatus:
+          type: string
+        comment:
+          type: ["string", "null"]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, productId, presentationName, presentationType, unit, isActive, createdAt, updatedAt]
+
+    TrsError:
+      type: object
+      properties:
+        reason:
+          type: string
+        message:
+          type: string
+      required: [reason, message]
 
     # Downtime Category
     DowntimeCategory:
@@ -1786,7 +1980,13 @@ components:
               items:
                 $ref: "#/components/schemas/DowntimeEvent"
             trsMetrics:
-              $ref: "#/components/schemas/TrsMetrics"
+              oneOf:
+                - $ref: "#/components/schemas/TrsMetrics"
+                - type: "null"
+            trsError:
+              oneOf:
+                - $ref: "#/components/schemas/TrsError"
+                - type: "null"
 
     CreateProductionEntryBody:
       type: object

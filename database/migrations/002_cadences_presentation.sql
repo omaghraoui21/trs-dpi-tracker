@@ -52,6 +52,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS cadences_active_triplet_unique
   ON cadences(product_id, equipment_id, presentation_id)
   WHERE is_active = true AND presentation_id IS NOT NULL;
 
+-- NOTE: The legacy unique constraint on (product_id, equipment_id, valid_from) still exists
+-- in the Drizzle schema. It is superseded by cadences_active_triplet_unique for Phase 5
+-- triplet logic. The API sets valid_from = current date on each insert to avoid collisions.
+-- This legacy constraint can be dropped in Phase 6 once confirmed no longer needed.
+
 -- ============================================================================
 -- ROLLBACK (commented out - uncomment to reverse this migration)
 -- ============================================================================

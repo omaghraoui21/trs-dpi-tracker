@@ -242,6 +242,73 @@ router.post(
   },
 );
 
+// ─── Cadence helper: fetch full cadence with joined names ────────────────────
+function formatCadenceRow(r: {
+  id: string;
+  productId: string;
+  equipmentId: string;
+  presentationId: string | null;
+  theoreticalCadence: string;
+  validatedCadence: string;
+  unit: string;
+  validatedAt: Date | null;
+  validatedBy: string | null;
+  notes: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  productName: string | null;
+  equipmentName: string | null;
+  presentationName: string | null;
+}) {
+  return {
+    id: r.id,
+    productId: r.productId,
+    equipmentId: r.equipmentId,
+    presentationId: r.presentationId ?? null,
+    theoreticalCadence: parseFloat(r.theoreticalCadence as unknown as string),
+    validatedCadence: parseFloat(r.validatedCadence as unknown as string),
+    unit: r.unit,
+    validatedAt: r.validatedAt ? r.validatedAt.toISOString() : null,
+    validatedBy: r.validatedBy ?? null,
+    notes: r.notes ?? null,
+    isActive: r.isActive,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+    productName: r.productName ?? null,
+    equipmentName: r.equipmentName ?? null,
+    presentationName: r.presentationName ?? null,
+  };
+}
+
+async function fetchFullCadence(cadenceId: string) {
+  const [full] = await db
+    .select({
+      id: cadencesTable.id,
+      productId: cadencesTable.productId,
+      equipmentId: cadencesTable.equipmentId,
+      presentationId: cadencesTable.presentationId,
+      theoreticalCadence: cadencesTable.theoreticalCadence,
+      validatedCadence: cadencesTable.validatedCadence,
+      unit: cadencesTable.unit,
+      validatedAt: cadencesTable.validatedAt,
+      validatedBy: cadencesTable.validatedBy,
+      notes: cadencesTable.notes,
+      isActive: cadencesTable.isActive,
+      createdAt: cadencesTable.createdAt,
+      updatedAt: cadencesTable.updatedAt,
+      productName: productsTable.name,
+      equipmentName: equipmentsTable.name,
+      presentationName: productPresentationsTable.presentationName,
+    })
+    .from(cadencesTable)
+    .leftJoin(productsTable, eq(cadencesTable.productId, productsTable.id))
+    .leftJoin(equipmentsTable, eq(cadencesTable.equipmentId, equipmentsTable.id))
+    .leftJoin(productPresentationsTable, eq(cadencesTable.presentationId, productPresentationsTable.id))
+    .where(eq(cadencesTable.id, cadenceId));
+  return full;
+}
+
 // ─── Local Zod schemas for cadence routes (Phase 5) ─────────────────────────
 const ListCadencesQueryParams = z.object({
   productId: z.string().uuid().optional(),
@@ -305,26 +372,7 @@ router.get("/cadences", requireAuth, async (req, res): Promise<void> => {
 
   const rows = conditions.length > 0 ? await dbQuery.where(and(...conditions)) : await dbQuery;
 
-  res.json(
-    rows.map((r) => ({
-      id: r.id,
-      productId: r.productId,
-      equipmentId: r.equipmentId,
-      presentationId: r.presentationId ?? null,
-      theoreticalCadence: parseFloat(r.theoreticalCadence as unknown as string),
-      validatedCadence: parseFloat(r.validatedCadence as unknown as string),
-      unit: r.unit,
-      validatedAt: r.validatedAt ? r.validatedAt.toISOString() : null,
-      validatedBy: r.validatedBy ?? null,
-      notes: r.notes ?? null,
-      isActive: r.isActive,
-      createdAt: r.createdAt.toISOString(),
-      updatedAt: r.updatedAt.toISOString(),
-      productName: r.productName ?? null,
-      equipmentName: r.equipmentName ?? null,
-      presentationName: r.presentationName ?? null,
-    })),
-  );
+  res.json(rows.map(formatCadenceRow));
 });
 
 router.post("/cadences", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
@@ -367,7 +415,7 @@ router.post("/cadences", requireAuth, requireRole("admin"), async (req, res): Pr
           ),
         );
 
-      // Insert new cadence
+      // Insert new cadence (validFrom set to today to avoid legacy unique constraint collision)
       const [inserted] = await tx
         .insert(cadencesTable)
         .values({
@@ -379,6 +427,7 @@ router.post("/cadences", requireAuth, requireRole("admin"), async (req, res): Pr
           unit: unit ?? "units/hour",
           notes: notes ?? null,
           isActive: true,
+          validFrom: new Date().toISOString().slice(0, 10),
         })
         .returning();
 
@@ -394,49 +443,12 @@ router.post("/cadences", requireAuth, requireRole("admin"), async (req, res): Pr
     });
 
     // Fetch with joined names
-    const [full] = await db
-      .select({
-        id: cadencesTable.id,
-        productId: cadencesTable.productId,
-        equipmentId: cadencesTable.equipmentId,
-        presentationId: cadencesTable.presentationId,
-        theoreticalCadence: cadencesTable.theoreticalCadence,
-        validatedCadence: cadencesTable.validatedCadence,
-        unit: cadencesTable.unit,
-        validatedAt: cadencesTable.validatedAt,
-        validatedBy: cadencesTable.validatedBy,
-        notes: cadencesTable.notes,
-        isActive: cadencesTable.isActive,
-        createdAt: cadencesTable.createdAt,
-        updatedAt: cadencesTable.updatedAt,
-        productName: productsTable.name,
-        equipmentName: equipmentsTable.name,
-        presentationName: productPresentationsTable.presentationName,
-      })
-      .from(cadencesTable)
-      .leftJoin(productsTable, eq(cadencesTable.productId, productsTable.id))
-      .leftJoin(equipmentsTable, eq(cadencesTable.equipmentId, equipmentsTable.id))
-      .leftJoin(productPresentationsTable, eq(cadencesTable.presentationId, productPresentationsTable.id))
-      .where(eq(cadencesTable.id, row.id));
-
-    res.status(201).json({
-      id: full.id,
-      productId: full.productId,
-      equipmentId: full.equipmentId,
-      presentationId: full.presentationId ?? null,
-      theoreticalCadence: parseFloat(full.theoreticalCadence as unknown as string),
-      validatedCadence: parseFloat(full.validatedCadence as unknown as string),
-      unit: full.unit,
-      validatedAt: full.validatedAt ? full.validatedAt.toISOString() : null,
-      validatedBy: full.validatedBy ?? null,
-      notes: full.notes ?? null,
-      isActive: full.isActive,
-      createdAt: full.createdAt.toISOString(),
-      updatedAt: full.updatedAt.toISOString(),
-      productName: full.productName ?? null,
-      equipmentName: full.equipmentName ?? null,
-      presentationName: full.presentationName ?? null,
-    });
+    const full = await fetchFullCadence(row.id);
+    if (!full) {
+      res.status(404).json({ error: "Cadence introuvable" });
+      return;
+    }
+    res.status(201).json(formatCadenceRow(full));
   } catch (err) {
     if (isUniqueViolation(err)) {
       const constraint = getConstraintName(err);
@@ -461,7 +473,12 @@ router.post("/cadences/:id/reactivate", requireAuth, requireRole("admin"), async
   }
 
   if (existing.isActive) {
-    res.status(200).json({ message: "Cadence deja active" });
+    const full = await fetchFullCadence(cadenceId);
+    if (!full) {
+      res.status(404).json({ error: "Cadence introuvable" });
+      return;
+    }
+    res.status(200).json(formatCadenceRow(full));
     return;
   }
 
@@ -499,7 +516,12 @@ router.post("/cadences/:id/reactivate", requireAuth, requireRole("admin"), async
     newValues: { isActive: true } as Record<string, unknown>,
   });
 
-  res.status(200).json({ message: "Cadence reactivee" });
+  const full = await fetchFullCadence(cadenceId);
+  if (!full) {
+    res.status(404).json({ error: "Cadence introuvable" });
+    return;
+  }
+  res.status(200).json(formatCadenceRow(full));
 });
 
 router.delete("/cadences/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
@@ -525,7 +547,12 @@ router.delete("/cadences/:id", requireAuth, requireRole("admin"), async (req, re
     newValues: { isActive: false } as Record<string, unknown>,
   });
 
-  res.status(200).json({ message: "Cadence desactivee" });
+  const full = await fetchFullCadence(cadenceId);
+  if (!full) {
+    res.status(404).json({ error: "Cadence introuvable" });
+    return;
+  }
+  res.status(200).json(formatCadenceRow(full));
 });
 
 router.post("/cadences/:id/validate", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
@@ -551,7 +578,12 @@ router.post("/cadences/:id/validate", requireAuth, requireRole("admin"), async (
     newValues: { validatedAt: new Date().toISOString(), validatedBy: req.user!.id } as Record<string, unknown>,
   });
 
-  res.status(200).json({ message: "Cadence validee" });
+  const full = await fetchFullCadence(cadenceId);
+  if (!full) {
+    res.status(404).json({ error: "Cadence introuvable" });
+    return;
+  }
+  res.status(200).json(formatCadenceRow(full));
 });
 
 export default router;
