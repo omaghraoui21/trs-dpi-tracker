@@ -120,7 +120,7 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              disabled={submitting || !email || !password}
+              disabled={submitting}
               className="w-full bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-white font-semibold h-12 text-base mt-2 transition-all disabled:opacity-50"
             >
               {submitting ? (
