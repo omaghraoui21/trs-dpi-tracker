@@ -42,7 +42,10 @@ router.post("/auth/login", async (req, res): Promise<void> => {
       return;
     }
     const { email, password } = parsed.data;
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email.toLowerCase().trim()));
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, email.toLowerCase().trim()));
     // Always run bcrypt compare to prevent timing-based user enumeration
     const dummyHash = "$2b$12$invalidhashfortimingnormalization000000000000000000000000";
     const passwordOk = user
@@ -54,9 +57,15 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     }
     const token = await signToken({ sub: user.id, email: user.email, role: user.role });
     res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions());
-    writeAudit({ userId: user.id, tableName: "users", recordId: user.id, action: "login",
-      newValues: { email: user.email, role: user.role } });
+    writeAudit({
+      userId: user.id,
+      tableName: "users",
+      recordId: user.id,
+      action: "login",
+      newValues: { email: user.email, role: user.role },
+    });
     res.json({
+      token,
       user: {
         id: user.id,
         email: user.email,

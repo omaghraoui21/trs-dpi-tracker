@@ -1,5 +1,5 @@
 import React, { createContext, useContext } from "react";
-import { useGetCurrentUser, useLogin, useLogout } from "@workspace/api-client-react";
+import { useGetCurrentUser, useLogout, customFetch } from "@workspace/api-client-react";
 import type { User, LoginBody } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -29,11 +29,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
   });
 
-  const loginMutation = useLogin();
   const logoutMutation = useLogout();
 
   const login = async (credentials: LoginBody) => {
-    await loginMutation.mutateAsync({ data: credentials });
+    const result = await customFetch<{ token: string; user: User }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify(credentials),
+    });
+    localStorage.setItem("auth_token", result.token);
     await refetch();
   };
 
@@ -41,6 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await logoutMutation.mutateAsync();
     } finally {
+      localStorage.removeItem("auth_token");
       queryClient.setQueryData(["auth", "me"], null);
       setLocation("/login");
     }
