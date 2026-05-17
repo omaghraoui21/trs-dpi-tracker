@@ -1,18 +1,17 @@
 import { Router, IRouter } from "express";
-import { db, productsTable, cadencesTable, equipmentsTable } from "@workspace/db";
+import { db, productsTable, cadencesTable, equipmentsTable, productPresentationsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
-import { mapDbError, isForeignKeyViolation } from "../lib/db-errors";
+import { mapDbError, isForeignKeyViolation, isUniqueViolation, getConstraintName } from "../lib/db-errors";
 import { countDependencies } from "../lib/referential-deps";
 import { decideDeleteAction } from "../lib/smart-delete";
 import { writeAudit } from "../lib/audit";
+import { z } from "zod/v4";
 import {
   CreateProductBody,
   UpdateProductBody,
   UpdateProductParams,
   ListProductsQueryParams,
-  ListCadencesQueryParams,
-  UpsertCadenceBody,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -243,106 +242,348 @@ router.post(
   },
 );
 
+// ─── Cadence helper: fetch full cadence with joined names ────────────────────
+function formatCadenceRow(r: {
+  id: string;
+  productId: string;
+  equipmentId: string;
+  presentationId: string | null;
+  theoreticalCadence: string;
+  validatedCadence: string;
+  unit: string;
+  validatedAt: Date | null;
+  validatedBy: string | null;
+  notes: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  productName: string | null;
+  equipmentName: string | null;
+  presentationName: string | null;
+}) {
+  return {
+    id: r.id,
+    productId: r.productId,
+    equipmentId: r.equipmentId,
+    presentationId: r.presentationId ?? null,
+    theoreticalCadence: parseFloat(r.theoreticalCadence as unknown as string),
+    validatedCadence: parseFloat(r.validatedCadence as unknown as string),
+    unit: r.unit,
+    validatedAt: r.validatedAt ? r.validatedAt.toISOString() : null,
+    validatedBy: r.validatedBy ?? null,
+    notes: r.notes ?? null,
+    isActive: r.isActive,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+    productName: r.productName ?? null,
+    equipmentName: r.equipmentName ?? null,
+    presentationName: r.presentationName ?? null,
+  };
+}
+
+async function fetchFullCadence(cadenceId: string) {
+  const [full] = await db
+    .select({
+      id: cadencesTable.id,
+      productId: cadencesTable.productId,
+      equipmentId: cadencesTable.equipmentId,
+      presentationId: cadencesTable.presentationId,
+      theoreticalCadence: cadencesTable.theoreticalCadence,
+      validatedCadence: cadencesTable.validatedCadence,
+      unit: cadencesTable.unit,
+      validatedAt: cadencesTable.validatedAt,
+      validatedBy: cadencesTable.validatedBy,
+      notes: cadencesTable.notes,
+      isActive: cadencesTable.isActive,
+      createdAt: cadencesTable.createdAt,
+      updatedAt: cadencesTable.updatedAt,
+      productName: productsTable.name,
+      equipmentName: equipmentsTable.name,
+      presentationName: productPresentationsTable.presentationName,
+    })
+    .from(cadencesTable)
+    .leftJoin(productsTable, eq(cadencesTable.productId, productsTable.id))
+    .leftJoin(equipmentsTable, eq(cadencesTable.equipmentId, equipmentsTable.id))
+    .leftJoin(productPresentationsTable, eq(cadencesTable.presentationId, productPresentationsTable.id))
+    .where(eq(cadencesTable.id, cadenceId));
+  return full;
+}
+
+// ─── Local Zod schemas for cadence routes (Phase 5) ─────────────────────────
+const ListCadencesQueryParams = z.object({
+  productId: z.string().uuid().optional(),
+  equipmentId: z.string().uuid().optional(),
+  presentationId: z.string().uuid().optional(),
+  includeInactive: z.preprocess((v) => v === "true" || v === "1", z.boolean()).optional(),
+});
+
+const CreateCadenceBody = z.object({
+  productId: z.string().uuid(),
+  equipmentId: z.string().uuid(),
+  presentationId: z.string().uuid(),
+  theoreticalCadence: z.number().min(0),
+  validatedCadence: z.number().min(0),
+  unit: z.string().optional(),
+  notes: z.string().optional(),
+});
+
 // Cadences
 router.get("/cadences", requireAuth, async (req, res): Promise<void> => {
   const query = ListCadencesQueryParams.safeParse(req.query);
+  const includeInactive = query.success && query.data.includeInactive === true;
+
   const dbQuery = db
     .select({
       id: cadencesTable.id,
       productId: cadencesTable.productId,
       equipmentId: cadencesTable.equipmentId,
+      presentationId: cadencesTable.presentationId,
       theoreticalCadence: cadencesTable.theoreticalCadence,
       validatedCadence: cadencesTable.validatedCadence,
       unit: cadencesTable.unit,
+      validatedAt: cadencesTable.validatedAt,
+      validatedBy: cadencesTable.validatedBy,
+      notes: cadencesTable.notes,
+      isActive: cadencesTable.isActive,
+      createdAt: cadencesTable.createdAt,
+      updatedAt: cadencesTable.updatedAt,
       productName: productsTable.name,
       equipmentName: equipmentsTable.name,
+      presentationName: productPresentationsTable.presentationName,
     })
     .from(cadencesTable)
     .leftJoin(productsTable, eq(cadencesTable.productId, productsTable.id))
-    .leftJoin(equipmentsTable, eq(cadencesTable.equipmentId, equipmentsTable.id));
+    .leftJoin(equipmentsTable, eq(cadencesTable.equipmentId, equipmentsTable.id))
+    .leftJoin(productPresentationsTable, eq(cadencesTable.presentationId, productPresentationsTable.id));
 
   const conditions = [];
+  if (!includeInactive) {
+    conditions.push(eq(cadencesTable.isActive, true));
+  }
   if (query.success && query.data.productId) {
     conditions.push(eq(cadencesTable.productId, query.data.productId));
   }
   if (query.success && query.data.equipmentId) {
     conditions.push(eq(cadencesTable.equipmentId, query.data.equipmentId));
   }
+  if (query.success && query.data.presentationId) {
+    conditions.push(eq(cadencesTable.presentationId, query.data.presentationId));
+  }
 
   const rows = conditions.length > 0 ? await dbQuery.where(and(...conditions)) : await dbQuery;
 
-  res.json(
-    rows.map((r) => ({
-      ...r,
-      theoreticalCadence: parseFloat(r.theoreticalCadence as unknown as string),
-      validatedCadence: parseFloat(r.validatedCadence as unknown as string),
-    })),
-  );
+  res.json(rows.map(formatCadenceRow));
 });
 
 router.post("/cadences", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
-  const parsed = UpsertCadenceBody.safeParse(req.body);
+  const parsed = CreateCadenceBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
 
-  const existing = await db
+  const { productId, equipmentId, presentationId, theoreticalCadence, validatedCadence, unit, notes } = parsed.data;
+
+  // Validate that presentationId belongs to the specified product
+  const [presentation] = await db
     .select()
-    .from(cadencesTable)
+    .from(productPresentationsTable)
     .where(
       and(
-        eq(cadencesTable.productId, parsed.data.productId),
-        eq(cadencesTable.equipmentId, parsed.data.equipmentId),
+        eq(productPresentationsTable.id, presentationId),
+        eq(productPresentationsTable.productId, productId),
       ),
     );
 
-  let row;
-  if (existing.length > 0) {
-    [row] = await db
-      .update(cadencesTable)
-      .set({
-        theoreticalCadence: parsed.data.theoreticalCadence.toString(),
-        validatedCadence: parsed.data.validatedCadence.toString(),
-        unit: parsed.data.unit,
-      })
-      .where(eq(cadencesTable.id, existing[0].id))
-      .returning();
-  } else {
-    [row] = await db
-      .insert(cadencesTable)
-      .values({
-        productId: parsed.data.productId,
-        equipmentId: parsed.data.equipmentId,
-        theoreticalCadence: parsed.data.theoreticalCadence.toString(),
-        validatedCadence: parsed.data.validatedCadence.toString(),
-        unit: parsed.data.unit,
-      })
-      .returning();
+  if (!presentation) {
+    res.status(400).json({ error: "PRESENTATION_PRODUCT_MISMATCH", message: "La presentation ne correspond pas au produit" });
+    return;
   }
 
-  // fetch with names
-  const [full] = await db
-    .select({
-      id: cadencesTable.id,
-      productId: cadencesTable.productId,
-      equipmentId: cadencesTable.equipmentId,
-      theoreticalCadence: cadencesTable.theoreticalCadence,
-      validatedCadence: cadencesTable.validatedCadence,
-      unit: cadencesTable.unit,
-      productName: productsTable.name,
-      equipmentName: equipmentsTable.name,
-    })
-    .from(cadencesTable)
-    .leftJoin(productsTable, eq(cadencesTable.productId, productsTable.id))
-    .leftJoin(equipmentsTable, eq(cadencesTable.equipmentId, equipmentsTable.id))
-    .where(eq(cadencesTable.id, row.id));
+  try {
+    const row = await db.transaction(async (tx) => {
+      // Deactivate any prior active cadence for the same triplet
+      await tx
+        .update(cadencesTable)
+        .set({ isActive: false })
+        .where(
+          and(
+            eq(cadencesTable.productId, productId),
+            eq(cadencesTable.equipmentId, equipmentId),
+            eq(cadencesTable.presentationId, presentationId),
+            eq(cadencesTable.isActive, true),
+          ),
+        );
 
-  res.json({
-    ...full,
-    theoreticalCadence: parseFloat(full.theoreticalCadence as unknown as string),
-    validatedCadence: parseFloat(full.validatedCadence as unknown as string),
+      // Insert new cadence (validFrom set to today to avoid legacy unique constraint collision)
+      const [inserted] = await tx
+        .insert(cadencesTable)
+        .values({
+          productId,
+          equipmentId,
+          presentationId,
+          theoreticalCadence: theoreticalCadence.toString(),
+          validatedCadence: validatedCadence.toString(),
+          unit: unit ?? "units/hour",
+          notes: notes ?? null,
+          isActive: true,
+          validFrom: new Date().toISOString().slice(0, 10),
+        })
+        .returning();
+
+      return inserted;
+    });
+
+    writeAudit({
+      userId: req.user!.id,
+      tableName: "cadences",
+      recordId: row.id,
+      action: "create",
+      newValues: { productId, equipmentId, presentationId, theoreticalCadence, validatedCadence } as Record<string, unknown>,
+    });
+
+    // Fetch with joined names
+    const full = await fetchFullCadence(row.id);
+    if (!full) {
+      res.status(404).json({ error: "Cadence introuvable" });
+      return;
+    }
+    res.status(201).json(formatCadenceRow(full));
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      const constraint = getConstraintName(err);
+      if (constraint === "cadences_active_triplet_unique") {
+        res.status(409).json({ error: "ACTIVE_TRIPLET_CONFLICT", message: "Une cadence active existe deja pour ce triplet produit/equipement/presentation" });
+      } else {
+        res.status(409).json({ error: "LEGACY_VALID_FROM_CONFLICT", message: "Un conflit d'unicite a ete detecte (product, equipment, validFrom)" });
+      }
+      return;
+    }
+    throw err;
+  }
+});
+
+router.post("/cadences/:id/reactivate", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+  const cadenceId = req.params["id"] as string;
+
+  const [existing] = await db.select().from(cadencesTable).where(eq(cadencesTable.id, cadenceId));
+  if (!existing) {
+    res.status(404).json({ error: "Cadence introuvable" });
+    return;
+  }
+
+  if (existing.isActive) {
+    const full = await fetchFullCadence(cadenceId);
+    if (!full) {
+      res.status(404).json({ error: "Cadence introuvable" });
+      return;
+    }
+    res.status(200).json(formatCadenceRow(full));
+    return;
+  }
+
+  // Check for active conflict on the same triplet
+  if (existing.presentationId) {
+    const [conflict] = await db
+      .select()
+      .from(cadencesTable)
+      .where(
+        and(
+          eq(cadencesTable.productId, existing.productId),
+          eq(cadencesTable.equipmentId, existing.equipmentId),
+          eq(cadencesTable.presentationId, existing.presentationId),
+          eq(cadencesTable.isActive, true),
+        ),
+      );
+
+    if (conflict) {
+      res.status(409).json({ error: "ACTIVE_TRIPLET_CONFLICT", message: "Une cadence active existe deja pour ce triplet" });
+      return;
+    }
+  }
+
+  await db
+    .update(cadencesTable)
+    .set({ isActive: true })
+    .where(eq(cadencesTable.id, cadenceId));
+
+  writeAudit({
+    userId: req.user!.id,
+    tableName: "cadences",
+    recordId: cadenceId,
+    action: "reactivate",
+    oldValues: { isActive: false } as Record<string, unknown>,
+    newValues: { isActive: true } as Record<string, unknown>,
   });
+
+  const full = await fetchFullCadence(cadenceId);
+  if (!full) {
+    res.status(404).json({ error: "Cadence introuvable" });
+    return;
+  }
+  res.status(200).json(formatCadenceRow(full));
+});
+
+router.delete("/cadences/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+  const cadenceId = req.params["id"] as string;
+
+  const [existing] = await db.select().from(cadencesTable).where(eq(cadencesTable.id, cadenceId));
+  if (!existing) {
+    res.status(404).json({ error: "Cadence introuvable" });
+    return;
+  }
+
+  await db
+    .update(cadencesTable)
+    .set({ isActive: false })
+    .where(eq(cadencesTable.id, cadenceId));
+
+  writeAudit({
+    userId: req.user!.id,
+    tableName: "cadences",
+    recordId: cadenceId,
+    action: "deactivate",
+    oldValues: { isActive: true } as Record<string, unknown>,
+    newValues: { isActive: false } as Record<string, unknown>,
+  });
+
+  const full = await fetchFullCadence(cadenceId);
+  if (!full) {
+    res.status(404).json({ error: "Cadence introuvable" });
+    return;
+  }
+  res.status(200).json(formatCadenceRow(full));
+});
+
+router.post("/cadences/:id/validate", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+  const cadenceId = req.params["id"] as string;
+
+  const [existing] = await db.select().from(cadencesTable).where(eq(cadencesTable.id, cadenceId));
+  if (!existing) {
+    res.status(404).json({ error: "Cadence introuvable" });
+    return;
+  }
+
+  await db
+    .update(cadencesTable)
+    .set({ validatedAt: new Date(), validatedBy: req.user!.id })
+    .where(eq(cadencesTable.id, cadenceId));
+
+  writeAudit({
+    userId: req.user!.id,
+    tableName: "cadences",
+    recordId: cadenceId,
+    action: "validate",
+    oldValues: { validatedAt: existing.validatedAt, validatedBy: existing.validatedBy } as Record<string, unknown>,
+    newValues: { validatedAt: new Date().toISOString(), validatedBy: req.user!.id } as Record<string, unknown>,
+  });
+
+  const full = await fetchFullCadence(cadenceId);
+  if (!full) {
+    res.status(404).json({ error: "Cadence introuvable" });
+    return;
+  }
+  res.status(200).json(formatCadenceRow(full));
 });
 
 export default router;

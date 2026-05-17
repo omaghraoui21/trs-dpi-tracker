@@ -19,6 +19,7 @@ import type {
 import type {
   Cadence,
   ConflictError,
+  CreateCadenceBody,
   CreateDowntimeCategoryBody,
   CreateDowntimeEventBody,
   CreateEquipmentBody,
@@ -61,6 +62,7 @@ import type {
   PlanEntry,
   PlanWeekSummary,
   Product,
+  ProductPresentation,
   ProductionEntryWithDetails,
   UpdateDowntimeCategoryBody,
   UpdateDowntimeEventBody,
@@ -69,7 +71,6 @@ import type {
   UpdateProductBody,
   UpdateProductionEntryBody,
   UpdateUserBody,
-  UpsertCadenceBody,
   User,
   ValidateEntryBody,
   ValidatePlanBody,
@@ -1559,42 +1560,42 @@ export function useListCadences<
 }
 
 /**
- * @summary Create or update a cadence
+ * @summary Create a cadence
  */
-export const getUpsertCadenceUrl = () => {
+export const getCreateCadenceUrl = () => {
   return `/api/cadences`;
 };
 
-export const upsertCadence = async (
-  upsertCadenceBody: UpsertCadenceBody,
+export const createCadence = async (
+  createCadenceBody: CreateCadenceBody,
   options?: RequestInit,
 ): Promise<Cadence> => {
-  return customFetch<Cadence>(getUpsertCadenceUrl(), {
+  return customFetch<Cadence>(getCreateCadenceUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(upsertCadenceBody),
+    body: JSON.stringify(createCadenceBody),
   });
 };
 
-export const getUpsertCadenceMutationOptions = <
-  TError = ErrorType<unknown>,
+export const getCreateCadenceMutationOptions = <
+  TError = ErrorType<ConflictError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof upsertCadence>>,
+    Awaited<ReturnType<typeof createCadence>>,
     TError,
-    { data: BodyType<UpsertCadenceBody> },
+    { data: BodyType<CreateCadenceBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof upsertCadence>>,
+  Awaited<ReturnType<typeof createCadence>>,
   TError,
-  { data: BodyType<UpsertCadenceBody> },
+  { data: BodyType<CreateCadenceBody> },
   TContext
 > => {
-  const mutationKey = ["upsertCadence"];
+  const mutationKey = ["createCadence"];
   const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
       ? options
@@ -1602,40 +1603,340 @@ export const getUpsertCadenceMutationOptions = <
     : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof upsertCadence>>,
-    { data: BodyType<UpsertCadenceBody> }
+    Awaited<ReturnType<typeof createCadence>>,
+    { data: BodyType<CreateCadenceBody> }
   > = (props) => {
     const { data } = props ?? {};
 
-    return upsertCadence(data, requestOptions);
+    return createCadence(data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type UpsertCadenceMutationResult = NonNullable<Awaited<ReturnType<typeof upsertCadence>>>;
-export type UpsertCadenceMutationBody = BodyType<UpsertCadenceBody>;
-export type UpsertCadenceMutationError = ErrorType<unknown>;
+export type CreateCadenceMutationResult = NonNullable<Awaited<ReturnType<typeof createCadence>>>;
+export type CreateCadenceMutationBody = BodyType<CreateCadenceBody>;
+export type CreateCadenceMutationError = ErrorType<ConflictError>;
 
 /**
- * @summary Create or update a cadence
+ * @summary Create a cadence
  */
-export const useUpsertCadence = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+export const useCreateCadence = <TError = ErrorType<ConflictError>, TContext = unknown>(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof upsertCadence>>,
+    Awaited<ReturnType<typeof createCadence>>,
     TError,
-    { data: BodyType<UpsertCadenceBody> },
+    { data: BodyType<CreateCadenceBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
-  Awaited<ReturnType<typeof upsertCadence>>,
+  Awaited<ReturnType<typeof createCadence>>,
   TError,
-  { data: BodyType<UpsertCadenceBody> },
+  { data: BodyType<CreateCadenceBody> },
   TContext
 > => {
-  return useMutation(getUpsertCadenceMutationOptions(options));
+  return useMutation(getCreateCadenceMutationOptions(options));
 };
+
+/** @deprecated Use useCreateCadence instead */
+export const useUpsertCadence = useCreateCadence;
+
+/**
+ * @summary Reactivate an inactive cadence
+ */
+export const getReactivateCadenceUrl = (id: string) => {
+  return `/api/cadences/${id}/reactivate`;
+};
+
+export const reactivateCadence = async (id: string, options?: RequestInit): Promise<Cadence> => {
+  return customFetch<Cadence>(getReactivateCadenceUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getReactivateCadenceMutationOptions = <
+  TError = ErrorType<ConflictError | void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reactivateCadence>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reactivateCadence>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["reactivateCadence"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reactivateCadence>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return reactivateCadence(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReactivateCadenceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reactivateCadence>>
+>;
+export type ReactivateCadenceMutationError = ErrorType<ConflictError | void>;
+
+/**
+ * @summary Reactivate an inactive cadence
+ */
+export const useReactivateCadence = <
+  TError = ErrorType<ConflictError | void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reactivateCadence>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reactivateCadence>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getReactivateCadenceMutationOptions(options));
+};
+
+/**
+ * @summary Deactivate a cadence (soft delete)
+ */
+export const getDeleteCadenceUrl = (id: string) => {
+  return `/api/cadences/${id}`;
+};
+
+export const deleteCadence = async (id: string, options?: RequestInit): Promise<Cadence> => {
+  return customFetch<Cadence>(getDeleteCadenceUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteCadenceMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteCadence>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteCadence>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["deleteCadence"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteCadence>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteCadence(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteCadenceMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCadence>>>;
+export type DeleteCadenceMutationError = ErrorType<void>;
+
+/**
+ * @summary Deactivate a cadence (soft delete)
+ */
+export const useDeleteCadence = <TError = ErrorType<void>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteCadence>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteCadence>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getDeleteCadenceMutationOptions(options));
+};
+
+/**
+ * @summary Mark cadence as validated
+ */
+export const getValidateCadenceUrl = (id: string) => {
+  return `/api/cadences/${id}/validate`;
+};
+
+export const validateCadence = async (id: string, options?: RequestInit): Promise<Cadence> => {
+  return customFetch<Cadence>(getValidateCadenceUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getValidateCadenceMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof validateCadence>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof validateCadence>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["validateCadence"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof validateCadence>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return validateCadence(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ValidateCadenceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof validateCadence>>
+>;
+export type ValidateCadenceMutationError = ErrorType<void>;
+
+/**
+ * @summary Mark cadence as validated
+ */
+export const useValidateCadence = <TError = ErrorType<void>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof validateCadence>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof validateCadence>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getValidateCadenceMutationOptions(options));
+};
+
+/**
+ * @summary List presentations for a product
+ */
+export const getListProductPresentationsUrl = (id: string) => {
+  return `/api/products/${id}/presentations`;
+};
+
+export const listProductPresentations = async (
+  id: string,
+  options?: RequestInit,
+): Promise<ProductPresentation[]> => {
+  return customFetch<ProductPresentation[]>(getListProductPresentationsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListProductPresentationsQueryKey = (id: string) => {
+  return [`/api/products/${id}/presentations`] as const;
+};
+
+export const getListProductPresentationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listProductPresentations>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listProductPresentations>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListProductPresentationsQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listProductPresentations>>> = ({
+    signal,
+  }) => listProductPresentations(id, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, enabled: !!id, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listProductPresentations>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListProductPresentationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listProductPresentations>>
+>;
+export type ListProductPresentationsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List presentations for a product
+ */
+export function useListProductPresentations<
+  TData = Awaited<ReturnType<typeof listProductPresentations>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<Awaited<ReturnType<typeof listProductPresentations>>, TError, TData>;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListProductPresentationsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary List all downtime categories

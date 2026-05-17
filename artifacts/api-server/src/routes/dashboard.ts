@@ -20,10 +20,11 @@ import {
   GetMonthlyKpisQueryParams,
 } from "@workspace/api-zod";
 import {
-  calculateTrs,
+  calculateTrsSafe,
   calculateMonthlyTrs,
   calculateMonthlyTrsV2,
   shiftDurationMinutes,
+  type TrsMetrics,
   type DailyBaseRow,
   type ProdMetricsRow,
 } from "../lib/trs-engine";
@@ -102,7 +103,8 @@ function computeEntryMetrics(
   const plannedMinutes = downtimes.filter(d => d.isPlanned).reduce((s, d) => s + d.durationMinutes, 0);
   const unplannedMinutes = downtimes.filter(d => !d.isPlanned).reduce((s, d) => s + d.durationMinutes, 0);
   const shiftDuration = shiftDurationMinutes(entry.shiftStart, entry.shiftEnd);
-  return calculateTrs({
+  // Phase 6 hotfix: fail-loud on missing cadence. Returns null instead of phantom 0%.
+  return calculateTrsSafe({
     shiftDurationMinutes: shiftDuration,
     plannedDowntimeMinutes: plannedMinutes,
     unplannedDowntimeMinutes: unplannedMinutes,
@@ -124,10 +126,14 @@ async function getEntriesWithMetrics(from: string, to: string, equipmentId?: str
   if (entries.length === 0) return [];
 
   const { downtimesByEntry, cadencesByPair } = await batchFetchMetadata(entries);
-  return entries.map(entry => ({
-    entry,
-    metrics: computeEntryMetrics(entry, downtimesByEntry, cadencesByPair),
-  }));
+  return entries.map(entry => {
+    const safe = computeEntryMetrics(entry, downtimesByEntry, cadencesByPair);
+    return {
+      entry,
+      metrics: safe.metrics,
+      trsError: safe.error,
+    };
+  });
 }
 
 /**
@@ -182,7 +188,11 @@ async function getMonthlyTrsResult(
     equipmentId ? getDailyBase(from, to, equipmentId) : Promise.resolve([] as DailyBaseRow[]),
   ]);
 
-  const prodMetrics = entriesWithMetrics.map((e) => e.metrics);
+  // Phase 6 hotfix: skip entries with null metrics (missing cadence) from aggregation
+  // so they don't get counted as 0% and skew the average.
+  const prodMetrics: TrsMetrics[] = entriesWithMetrics
+    .map((e) => e.metrics)
+    .filter((m): m is TrsMetrics => m !== null);
 
   if (dailyBase.length > 0) {
     return {
@@ -321,9 +331,9 @@ router.get("/dashboard/daily-trs", requireAuth, asyncHandler(async (req, res) =>
       continue;
     }
 
-    const dayMetrics = dayEntries.map(entry =>
-      computeEntryMetrics(entry, downtimesByEntry, cadencesByPair)
-    );
+    const dayMetrics = dayEntries
+      .map(entry => computeEntryMetrics(entry, downtimesByEntry, cadencesByPair).metrics)
+      .filter((m): m is TrsMetrics => m !== null);
     const combined = calculateMonthlyTrs({ entries: dayMetrics, trsObjective });
 
     result.push({
@@ -603,7 +613,8 @@ router.get("/dashboard/pending-validations", requireAuth, requireRole("superviso
     const plannedMinutes = downtimes.filter(d => d.categoryIsPlanned).reduce((s, d) => s + d.durationMinutes, 0);
     const unplannedMinutes = downtimes.filter(d => !d.categoryIsPlanned).reduce((s, d) => s + d.durationMinutes, 0);
     const shiftDur = shiftDurationMinutes(entry.shiftStart, entry.shiftEnd);
-    const trsMetrics = calculateTrs({
+    // Phase 6 hotfix: fail-loud on missing cadence — surface trsError to clients.
+    const { metrics: trsMetrics, error: trsError } = calculateTrsSafe({
       shiftDurationMinutes: shiftDur,
       plannedDowntimeMinutes: plannedMinutes,
       unplannedDowntimeMinutes: unplannedMinutes,
@@ -647,6 +658,7 @@ router.get("/dashboard/pending-validations", requireAuth, requireRole("superviso
         isDeleted: d.isDeleted,
       })),
       trsMetrics,
+      trsError,
     };
   });
 
@@ -710,7 +722,9 @@ router.get("/dashboard/weekly-trs", requireAuth, asyncHandler(async (req, res) =
 
   const result = Array.from(byWeek.keys()).sort((a, b) => a - b).map((weekNum) => {
     const wEntries = byWeek.get(weekNum)!;
-    const metrics = wEntries.map(entry => computeEntryMetrics(entry, downtimesByEntry, cadencesByPair));
+    const metrics = wEntries
+      .map(entry => computeEntryMetrics(entry, downtimesByEntry, cadencesByPair).metrics)
+      .filter((m): m is TrsMetrics => m !== null);
     const w = calculateMonthlyTrs({ entries: metrics, trsObjective: 75 });
     return {
       week: weekNum, weekLabel: `S${String(weekNum).padStart(2,"0")}`,

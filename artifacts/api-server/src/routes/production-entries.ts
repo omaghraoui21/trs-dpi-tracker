@@ -7,11 +7,11 @@ import {
   equipmentsTable,
   productsTable,
   usersTable,
-  cadencesTable,
 } from "@workspace/db";
 import { eq, and, gte, lte, inArray } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
-import { calculateTrs, shiftDurationMinutes } from "../lib/trs-engine";
+import { calculateTrsSafe, shiftDurationMinutes, type TrsError } from "../lib/trs-engine";
+import { resolveDefaultPresentationId, lookupActiveCadence } from "../lib/cadence-lookup";
 import { z } from "zod/v4";
 import { isUniqueViolation } from "../lib/db-errors";
 import { writeAudit } from "../lib/audit";
@@ -157,12 +157,29 @@ async function buildEntriesWithDetails(entryIds: string[]) {
 
   const pairs = [...new Map(entries.map(e => [`${e.productId}-${e.equipmentId}`, { productId: e.productId, equipmentId: e.equipmentId }])).values()];
   const uniqueProductIds = [...new Set(pairs.map(p => p.productId))];
-  const allCadences = uniqueProductIds.length > 0
-    ? await db
-        .select()
-        .from(cadencesTable)
-        .where(inArray(cadencesTable.productId, uniqueProductIds))
-    : [];
+
+  // Phase 6 hotfix: deterministic cadence resolution by triplet (product, equipment, presentation).
+  // - Memoize resolveDefaultPresentationId per productId to avoid N+1 across entries sharing a product.
+  // - Use lookupActiveCadence to fetch the unique active triplet row (partial unique index).
+  // production_entries has no presentation_id column yet, so we always resolve via default rule.
+  const defaultPresentationCache = new Map<string, string | null>();
+  for (const pid of uniqueProductIds) {
+    defaultPresentationCache.set(pid, await resolveDefaultPresentationId(pid));
+  }
+
+  const cadenceCache = new Map<string, number>();
+  for (const { productId, equipmentId } of pairs) {
+    const presentationId = defaultPresentationCache.get(productId) ?? null;
+    if (!presentationId) {
+      cadenceCache.set(`${productId}:${equipmentId}`, 0);
+      continue;
+    }
+    const row = await lookupActiveCadence({ productId, equipmentId, presentationId });
+    cadenceCache.set(
+      `${productId}:${equipmentId}`,
+      row ? parseFloat(row.validatedCadence as unknown as string) : 0,
+    );
+  }
 
   const downtimesByEntry = new Map<string, DowntimeRow[]>();
   for (const d of allDowntimes) {
@@ -172,15 +189,12 @@ async function buildEntriesWithDetails(entryIds: string[]) {
 
   return entries.map((entry: EntryRow) => {
     const downtimeRows = downtimesByEntry.get(entry.id) ?? [];
-    const cadence = allCadences.find(
-      c => c.productId === entry.productId && c.equipmentId === entry.equipmentId
-    );
-    const validatedCadence = cadence ? parseFloat(cadence.validatedCadence as unknown as string) : 0;
+    const validatedCadence = cadenceCache.get(`${entry.productId}:${entry.equipmentId}`) ?? 0;
     const plannedMinutes = downtimeRows.filter(d => d.categoryIsPlanned).reduce((s, d) => s + d.durationMinutes, 0);
     const unplannedMinutes = downtimeRows.filter(d => !d.categoryIsPlanned).reduce((s, d) => s + d.durationMinutes, 0);
     const shiftDuration = shiftDurationMinutes(entry.shiftStart, entry.shiftEnd);
 
-    const trsMetrics = calculateTrs({
+    const trsMetrics = calculateTrsSafe({
       shiftDurationMinutes: shiftDuration,
       plannedDowntimeMinutes: plannedMinutes,
       unplannedDowntimeMinutes: unplannedMinutes,
@@ -224,7 +238,8 @@ async function buildEntriesWithDetails(entryIds: string[]) {
         comment: d.comment ?? null,
         isDeleted: d.isDeleted,
       })),
-      trsMetrics,
+      trsMetrics: trsMetrics.metrics,
+      trsError: trsMetrics.error,
     };
   });
 }

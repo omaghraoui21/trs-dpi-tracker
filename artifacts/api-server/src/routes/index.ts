@@ -19,6 +19,7 @@ import notificationRulesRouter from "./notification-rules";
 import adminConfigRouter from "./admin-config";
 import calendarEventsRouter from "./calendar-events";
 import dailyEntriesRouter from "./daily-entries";
+import productPresentationsRouter from "./product-presentations";
 
 const router: IRouter = Router();
 
@@ -42,5 +43,6 @@ router.use(notificationRulesRouter);
 router.use("/admin", adminConfigRouter);
 router.use(calendarEventsRouter);
 router.use(dailyEntriesRouter);
+router.use(productPresentationsRouter);
 
 export default router;

@@ -30,3 +30,9 @@ export function mapDbError(err: unknown): { status: number; body: { error: strin
   }
   return null;
 }
+
+export function getConstraintName(err: unknown): string | undefined {
+  if (typeof err !== "object" || err === null) return undefined;
+  const e = err as { constraint?: string; cause?: { constraint?: string } };
+  return e.constraint ?? e.cause?.constraint;
+}

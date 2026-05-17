@@ -347,43 +347,178 @@ export const ReactivateProductResponse = zod.object({
 /**
  * @summary List cadences by product and equipment
  */
+export const listCadencesQueryIncludeInactiveDefault = false;
+
 export const ListCadencesQueryParams = zod.object({
   productId: zod.coerce.string().uuid().optional(),
   equipmentId: zod.coerce.string().uuid().optional(),
+  presentationId: zod.coerce.string().uuid().optional(),
+  includeInactive: zod.coerce.boolean().default(listCadencesQueryIncludeInactiveDefault),
 });
 
 export const ListCadencesResponseItem = zod.object({
   id: zod.string().uuid(),
   productId: zod.string().uuid(),
   equipmentId: zod.string().uuid(),
+  presentationId: zod.string().uuid().nullish(),
   theoreticalCadence: zod.number().describe("Theoretical cadence (units\/hour)"),
   validatedCadence: zod.number().describe("Validated product cadence (units\/hour)"),
   unit: zod.string().describe("Unit (blisters\/min, capsules\/min, etc.)"),
+  validatedAt: zod.string().nullish(),
+  validatedBy: zod.string().uuid().nullish(),
+  notes: zod.string().nullish(),
+  isActive: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
   productName: zod.string().nullish(),
   equipmentName: zod.string().nullish(),
+  presentationName: zod.string().nullish(),
 });
 export const ListCadencesResponse = zod.array(ListCadencesResponseItem);
 
 /**
- * @summary Create or update a cadence
+ * @summary Create a cadence
  */
-export const UpsertCadenceBody = zod.object({
+export const CreateCadenceBody = zod.object({
   productId: zod.string().uuid(),
   equipmentId: zod.string().uuid(),
+  presentationId: zod.string().uuid(),
   theoreticalCadence: zod.number(),
   validatedCadence: zod.number(),
-  unit: zod.string(),
+  unit: zod.string().optional(),
+  notes: zod.string().optional(),
 });
 
-export const UpsertCadenceResponse = zod.object({
+export const CreateCadenceResponse = zod.object({
   id: zod.string().uuid(),
   productId: zod.string().uuid(),
   equipmentId: zod.string().uuid(),
+  presentationId: zod.string().uuid().nullish(),
   theoreticalCadence: zod.number().describe("Theoretical cadence (units\/hour)"),
   validatedCadence: zod.number().describe("Validated product cadence (units\/hour)"),
   unit: zod.string().describe("Unit (blisters\/min, capsules\/min, etc.)"),
+  validatedAt: zod.string().nullish(),
+  validatedBy: zod.string().uuid().nullish(),
+  notes: zod.string().nullish(),
+  isActive: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
   productName: zod.string().nullish(),
   equipmentName: zod.string().nullish(),
+  presentationName: zod.string().nullish(),
+});
+
+/**
+ * @summary Reactivate an inactive cadence
+ */
+export const ReactivateCadenceParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const ReactivateCadenceResponse = zod.object({
+  id: zod.string().uuid(),
+  productId: zod.string().uuid(),
+  equipmentId: zod.string().uuid(),
+  presentationId: zod.string().uuid().nullish(),
+  theoreticalCadence: zod.number().describe("Theoretical cadence (units\/hour)"),
+  validatedCadence: zod.number().describe("Validated product cadence (units\/hour)"),
+  unit: zod.string().describe("Unit (blisters\/min, capsules\/min, etc.)"),
+  validatedAt: zod.string().nullish(),
+  validatedBy: zod.string().uuid().nullish(),
+  notes: zod.string().nullish(),
+  isActive: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+  productName: zod.string().nullish(),
+  equipmentName: zod.string().nullish(),
+  presentationName: zod.string().nullish(),
+});
+
+/**
+ * @summary Deactivate a cadence (soft delete)
+ */
+export const DeleteCadenceParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const DeleteCadenceResponse = zod.object({
+  id: zod.string().uuid(),
+  productId: zod.string().uuid(),
+  equipmentId: zod.string().uuid(),
+  presentationId: zod.string().uuid().nullish(),
+  theoreticalCadence: zod.number().describe("Theoretical cadence (units\/hour)"),
+  validatedCadence: zod.number().describe("Validated product cadence (units\/hour)"),
+  unit: zod.string().describe("Unit (blisters\/min, capsules\/min, etc.)"),
+  validatedAt: zod.string().nullish(),
+  validatedBy: zod.string().uuid().nullish(),
+  notes: zod.string().nullish(),
+  isActive: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+  productName: zod.string().nullish(),
+  equipmentName: zod.string().nullish(),
+  presentationName: zod.string().nullish(),
+});
+
+/**
+ * @summary Mark cadence as validated
+ */
+export const ValidateCadenceParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const ValidateCadenceResponse = zod.object({
+  id: zod.string().uuid(),
+  productId: zod.string().uuid(),
+  equipmentId: zod.string().uuid(),
+  presentationId: zod.string().uuid().nullish(),
+  theoreticalCadence: zod.number().describe("Theoretical cadence (units\/hour)"),
+  validatedCadence: zod.number().describe("Validated product cadence (units\/hour)"),
+  unit: zod.string().describe("Unit (blisters\/min, capsules\/min, etc.)"),
+  validatedAt: zod.string().nullish(),
+  validatedBy: zod.string().uuid().nullish(),
+  notes: zod.string().nullish(),
+  isActive: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+  productName: zod.string().nullish(),
+  equipmentName: zod.string().nullish(),
+  presentationName: zod.string().nullish(),
+});
+
+/**
+ * @summary List presentations for a product
+ */
+export const ListProductPresentationsParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const ListProductPresentationsResponseItem = zod.object({
+  id: zod.string().uuid(),
+  productId: zod.string().uuid(),
+  presentationName: zod.string(),
+  presentationType: zod.string(),
+  unit: zod.string(),
+  unitsPerBox: zod.number().nullish(),
+  blistersPerBox: zod.number().nullish(),
+  capsulesPerBlister: zod.number().nullish(),
+  isCombiforComponent: zod.boolean(),
+  isCombiforFinishedProduct: zod.boolean(),
+  needsConfirmation: zod.boolean(),
+  validationStatus: zod.string(),
+  comment: zod.string().nullish(),
+  isActive: zod.boolean(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListProductPresentationsResponse = zod.array(ListProductPresentationsResponseItem);
+
+/**
+ * TrsError schema
+ */
+export const TrsError = zod.object({
+  reason: zod.string(),
+  message: zod.string(),
 });
 
 /**
@@ -761,7 +896,13 @@ export const ListProductionEntriesResponseItem = zod
           unplannedDowntimeMinutes: zod.number(),
           cadenceGap: zod.number().describe("Gap between validated and actual cadence"),
         })
-        .optional(),
+        .nullish(),
+      trsError: zod
+        .object({
+          reason: zod.string(),
+          message: zod.string(),
+        })
+        .nullish(),
     }),
   );
 export const ListProductionEntriesResponse = zod.array(ListProductionEntriesResponseItem);
@@ -848,7 +989,13 @@ export const GetProductionEntryResponse = zod
           unplannedDowntimeMinutes: zod.number(),
           cadenceGap: zod.number().describe("Gap between validated and actual cadence"),
         })
-        .optional(),
+        .nullish(),
+      trsError: zod
+        .object({
+          reason: zod.string(),
+          message: zod.string(),
+        })
+        .nullish(),
     }),
   );
 
@@ -931,7 +1078,13 @@ export const UpdateProductionEntryResponse = zod
           unplannedDowntimeMinutes: zod.number(),
           cadenceGap: zod.number().describe("Gap between validated and actual cadence"),
         })
-        .optional(),
+        .nullish(),
+      trsError: zod
+        .object({
+          reason: zod.string(),
+          message: zod.string(),
+        })
+        .nullish(),
     }),
   );
 
@@ -1001,7 +1154,13 @@ export const SubmitProductionEntryResponse = zod
           unplannedDowntimeMinutes: zod.number(),
           cadenceGap: zod.number().describe("Gap between validated and actual cadence"),
         })
-        .optional(),
+        .nullish(),
+      trsError: zod
+        .object({
+          reason: zod.string(),
+          message: zod.string(),
+        })
+        .nullish(),
     }),
   );
 
@@ -1076,7 +1235,13 @@ export const ValidateProductionEntryResponse = zod
           unplannedDowntimeMinutes: zod.number(),
           cadenceGap: zod.number().describe("Gap between validated and actual cadence"),
         })
-        .optional(),
+        .nullish(),
+      trsError: zod
+        .object({
+          reason: zod.string(),
+          message: zod.string(),
+        })
+        .nullish(),
     }),
   );
 
@@ -1340,7 +1505,13 @@ export const GetPendingValidationsResponseItem = zod
           unplannedDowntimeMinutes: zod.number(),
           cadenceGap: zod.number().describe("Gap between validated and actual cadence"),
         })
-        .optional(),
+        .nullish(),
+      trsError: zod
+        .object({
+          reason: zod.string(),
+          message: zod.string(),
+        })
+        .nullish(),
     }),
   );
 export const GetPendingValidationsResponse = zod.array(GetPendingValidationsResponseItem);

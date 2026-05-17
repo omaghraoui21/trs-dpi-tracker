@@ -1,0 +1,31 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "Tests (backend integration cadences, TRS engine MissingCadenceError cases, production-entries TRS error, UI smoke CadencesTab), DELIVERABLES.md, and git commits.",
+  "status": "completed",
+  "steps": [
+    "1. Create `artifacts/api-server/src/__tests__/cadences-phase5.test.ts`: ~12 test cases covering: (a) GET /cadences returns extended fields (presentationId, isActive), (b) GET /cadences with includeInactive=true returns inactive, (c) POST /cadences with valid triplet creates and returns 201, (d) POST /cadences with mismatched presentationId returns 400 PRESENTATION_PRODUCT_MISMATCH, (e) POST /cadences duplicate active triplet returns 409 ACTIVE_TRIPLET_CONFLICT, (f) POST /cadences/:id/reactivate success, (g) POST /cadences/:id/reactivate conflict returns 409, (h) DELETE /cadences/:id soft-deletes, (i) POST /cadences/:id/validate sets validated_at/by, (j) cadence-lookup resolveDefaultPresentationId returns correct id, (k) cadence-lookup lookupActiveCadence returns row or null, (l) GET /products/:id/presentations returns list. These are unit tests that mock the db module (vi.mock('@workspace/db')) following the pattern of existing tests.",
+    "2. Extend `artifacts/api-server/src/__tests__/trs-engine.test.ts`: Add 4 new test cases at the end: (a) calculateTrsSafe returns error when validatedCadence=0, (b) calculateTrsSafe returns metrics when cadence valid, (c) MissingCadenceError has correct name and reason, (d) calculateTrsSafe returns error with reason MISSING_CADENCE for negative cadence.",
+    "3. Create `artifacts/api-server/src/__tests__/production-entries-trs-error.test.ts`: 1 test case verifying that when no cadence exists for a product/equipment pair, the production entry response includes trsMetrics: null and trsError with reason 'MISSING_CADENCE'. Mock db to return no cadence rows.",
+    "4. Create `artifacts/trs-app/src/pages/__tests__/CadencesTab.test.tsx`: 5 smoke test cases: (a) renders cadences table headers, (b) displays presentation column, (c) shows active/inactive badges, (d) shows validated timestamp, (e) renders add cadence button. Use vitest + testing-library patterns (import { render, screen } from '@testing-library/react' wrapped with QueryClientProvider mock).",
+    "5. Create `.agents/tasks/task-phase-5-cadences-presentation/DELIVERABLES.md`: Document all files modified/created, decisions (A: triplet uniqueness, B: soft-delete over hard, C: calculateTrsSafe wrapping, D: default presentation resolution rule, E: 409 error codes, F: backfill idempotency, G: migration idempotency, H: no silent TRS fallback), migration plan, rollback SQL, risks, test deltas (+22 cases target), verification notes (blocked by network).",
+    "6. Stage and commit backend changes: `git add` all backend files (lib/db, database/migrations, artifacts/api-server) then commit with message 'feat(api): cadences validees par triplet (product+equipment+presentation) + missing-cadence typed error in TRS engine'.",
+    "7. Stage and commit frontend + tests: `git add` all remaining files (lib/api-spec, lib/api-zod, lib/api-client-react, artifacts/trs-app, .agents/) then commit with message 'feat(spa): cadences tab triplet-aware (presentation Select, version + status badge, nouvelle validation flow, 409 inline) + smoke test'."
+  ],
+  "acceptance_criteria": [
+    "cadences-phase5.test.ts has ~12 test cases covering all CRUD + lookup operations",
+    "trs-engine.test.ts has 4 new cases for MissingCadenceError and calculateTrsSafe",
+    "production-entries-trs-error.test.ts has 1 case verifying trsError surface",
+    "CadencesTab.test.tsx has 5 smoke cases",
+    "DELIVERABLES.md is complete with decisions A-H, file list, risks, and verification notes",
+    "Two logical commits exist on feat/phase-5-cadences-presentation branch",
+    "Existing 65 trs-engine tests still pass (no breaking changes to calculateTrs signature)"
+  ],
+  "verification": [
+    "git log --oneline shows two new commits with correct messages",
+    "All test files have valid TypeScript/TSX syntax",
+    "DELIVERABLES.md exists and covers all required sections"
+  ],
+  "blocked_reason": null,
+  "findings": "All test files created with valid TypeScript syntax (verified via balanced-brace and regex-stripped parsing). CadencesTab exported from admin.tsx to enable testing. Git restructured into two logical commits. Cannot verify runtime (INTEGRATIONS_ONLY network, no node_modules). Import of calculateTrsSafe/MissingCadenceError placed after the last existing describe block using a mid-file import statement (valid in TS/vitest but unconventional; keeps existing imports untouched)."
+}
