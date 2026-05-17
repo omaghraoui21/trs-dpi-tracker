@@ -11,7 +11,7 @@ import {
 } from "@workspace/db";
 import { eq, and, gte, lte, inArray } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
-import { calculateTrs, shiftDurationMinutes } from "../lib/trs-engine";
+import { calculateTrsSafe, shiftDurationMinutes, type TrsError } from "../lib/trs-engine";
 import { z } from "zod/v4";
 import { isUniqueViolation } from "../lib/db-errors";
 import { writeAudit } from "../lib/audit";
@@ -180,7 +180,7 @@ async function buildEntriesWithDetails(entryIds: string[]) {
     const unplannedMinutes = downtimeRows.filter(d => !d.categoryIsPlanned).reduce((s, d) => s + d.durationMinutes, 0);
     const shiftDuration = shiftDurationMinutes(entry.shiftStart, entry.shiftEnd);
 
-    const trsMetrics = calculateTrs({
+    const trsMetrics = calculateTrsSafe({
       shiftDurationMinutes: shiftDuration,
       plannedDowntimeMinutes: plannedMinutes,
       unplannedDowntimeMinutes: unplannedMinutes,
@@ -224,7 +224,8 @@ async function buildEntriesWithDetails(entryIds: string[]) {
         comment: d.comment ?? null,
         isDeleted: d.isDeleted,
       })),
-      trsMetrics,
+      trsMetrics: trsMetrics.metrics,
+      trsError: trsMetrics.error,
     };
   });
 }

@@ -8,6 +8,8 @@ import { describe, it, expect } from "vitest";
 import {
   calculateTrs,
   calculateMonthlyTrs,
+  calculateTrsSafe,
+  MissingCadenceError,
   timeToMinutes,
   shiftDurationMinutes,
   type TrsInputs,
@@ -516,5 +518,59 @@ describe("Cas edge — Quantité déclarée physiquement impossible (QA Finding 
 
   it("TRS peut dépasser 1 dans ce cas — signale une incohérence de saisie", () => {
     expect(result.TRS).toBeGreaterThan(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────
+// Phase 5: calculateTrsSafe + MissingCadenceError
+// ─────────────────────────────────────────────────────────
+
+describe("Phase 5 — calculateTrsSafe", () => {
+  it("returns error with reason MISSING_CADENCE when validatedCadence is 0", () => {
+    const result = calculateTrsSafe({
+      shiftDurationMinutes: 480,
+      plannedDowntimeMinutes: 60,
+      unplannedDowntimeMinutes: 30,
+      quantityProduced: 1000,
+      quantityConforming: 950,
+      validatedCadence: 0,
+    });
+    expect(result.metrics).toBeNull();
+    expect(result.error).not.toBeNull();
+    expect(result.error!.reason).toBe("MISSING_CADENCE");
+  });
+
+  it("returns error for negative cadence", () => {
+    const result = calculateTrsSafe({
+      shiftDurationMinutes: 480,
+      plannedDowntimeMinutes: 0,
+      unplannedDowntimeMinutes: 0,
+      quantityProduced: 500,
+      quantityConforming: 500,
+      validatedCadence: -10,
+    });
+    expect(result.metrics).toBeNull();
+    expect(result.error!.reason).toBe("MISSING_CADENCE");
+  });
+
+  it("returns metrics when cadence is valid", () => {
+    const result = calculateTrsSafe({
+      shiftDurationMinutes: 480,
+      plannedDowntimeMinutes: 60,
+      unplannedDowntimeMinutes: 30,
+      quantityProduced: 1000,
+      quantityConforming: 950,
+      validatedCadence: 500,
+    });
+    expect(result.error).toBeNull();
+    expect(result.metrics).not.toBeNull();
+    expect(result.metrics!.TRS).toBeGreaterThan(0);
+  });
+
+  it("MissingCadenceError has correct name and reason", () => {
+    const err = new MissingCadenceError("NO_CADENCE_FOR_TRIPLET");
+    expect(err.name).toBe("MissingCadenceError");
+    expect(err.reason).toBe("NO_CADENCE_FOR_TRIPLET");
+    expect(err.message).toContain("NO_CADENCE_FOR_TRIPLET");
   });
 });

@@ -174,6 +174,26 @@ export function calculateMonthlyTrs(inputs: MonthlyTrsInputs) {
   };
 }
 
+// ─── Safe TRS calculation (Phase 5) ──────────────────────────────────────────
+
+export class MissingCadenceError extends Error {
+  reason: string;
+  constructor(reason: string) {
+    super(`Missing cadence: ${reason}`);
+    this.name = "MissingCadenceError";
+    this.reason = reason;
+  }
+}
+
+export type TrsError = { reason: string; message: string };
+
+export function calculateTrsSafe(inputs: TrsInputs): { metrics: TrsMetrics | null; error: TrsError | null } {
+  if (inputs.validatedCadence <= 0) {
+    return { metrics: null, error: { reason: "MISSING_CADENCE", message: "Cadence absente ou invalide pour ce triplet" } };
+  }
+  return { metrics: calculateTrs(inputs), error: null };
+}
+
 // ─── V2 Monthly consolidation (daily-entry-based — Excel model) ──────────────
 
 /**
