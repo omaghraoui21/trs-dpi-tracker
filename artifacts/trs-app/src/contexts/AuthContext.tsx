@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       method: "POST",
       body: JSON.stringify(credentials),
     });
-    localStorage.setItem("auth_token", result.token);
+    if (result.token) localStorage.setItem("auth_token", result.token);
     await refetch();
   };
 
