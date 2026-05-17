@@ -1,40 +1,44 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  ChevronLeft, ChevronRight, Plus, Pencil, Trash2, CheckCircle2,
-  Clock, AlertCircle, BookOpen, Loader2, Info, X,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Pencil,
+  Trash2,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  BookOpen,
+  Loader2,
+  Info,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useListEquipments } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
 
-const BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
-
-function apiHeaders(): Record<string, string> {
-  return { "Content-Type": "application/json" };
-}
-
-async function apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...opts,
-    credentials: "include",
-    headers: { ...apiHeaders(), ...(opts.headers ?? {}) },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error ?? res.statusText);
-  }
-  if (res.status === 204) return undefined as T;
-  return res.json();
-}
+import { customFetch } from "@workspace/api-client-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,11 +85,21 @@ interface MonthlySummary {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const MONTH_LABELS = [
-  "Janvier","Février","Mars","Avril","Mai","Juin",
-  "Juillet","Août","Septembre","Octobre","Novembre","Décembre",
+  "Janvier",
+  "Février",
+  "Mars",
+  "Avril",
+  "Mai",
+  "Juin",
+  "Juillet",
+  "Août",
+  "Septembre",
+  "Octobre",
+  "Novembre",
+  "Décembre",
 ];
 
-const DAY_LABELS = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
+const DAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 function fmtMin(min: number): string {
   const h = Math.floor(min / 60);
@@ -128,7 +142,14 @@ interface EntryDialogProps {
   onSaved: () => void;
 }
 
-function EntryDialog({ open, onClose, entry, defaultDate, equipmentId, onSaved }: EntryDialogProps) {
+function EntryDialog({
+  open,
+  onClose,
+  entry,
+  defaultDate,
+  equipmentId,
+  onSaved,
+}: EntryDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -136,24 +157,25 @@ function EntryDialog({ open, onClose, entry, defaultDate, equipmentId, onSaved }
 
   const [form, setForm] = useState<EntryFormData>(() => ({
     tOpeningMin: String(entry?.tOpeningMin ?? 540),
-    pauseMin:    String(entry?.pauseMin ?? 0),
-    chsgMin:     String(entry?.chsgMin ?? 0),
-    aprMin:      String(entry?.aprMin ?? 0),
-    mqchMin:     String(entry?.mqchMin ?? 0),
-    notes:       entry?.notes ?? "",
+    pauseMin: String(entry?.pauseMin ?? 0),
+    chsgMin: String(entry?.chsgMin ?? 0),
+    aprMin: String(entry?.aprMin ?? 0),
+    mqchMin: String(entry?.mqchMin ?? 0),
+    notes: entry?.notes ?? "",
   }));
 
-  const set = (k: keyof EntryFormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setForm(f => ({ ...f, [k]: e.target.value }));
-  };
+  const set =
+    (k: keyof EntryFormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      setForm((f) => ({ ...f, [k]: e.target.value }));
+    };
 
-  const tO   = Math.max(0, parseInt(form.tOpeningMin) || 0);
+  const tO = Math.max(0, parseInt(form.tOpeningMin) || 0);
   const pause = Math.max(0, parseInt(form.pauseMin) || 0);
-  const chsg  = Math.max(0, parseInt(form.chsgMin) || 0);
-  const apr   = Math.max(0, parseInt(form.aprMin) || 0);
-  const mqch  = Math.max(0, parseInt(form.mqchMin) || 0);
-  const tAP   = pause + chsg + apr + mqch;
-  const tR    = Math.max(0, tO - tAP);
+  const chsg = Math.max(0, parseInt(form.chsgMin) || 0);
+  const apr = Math.max(0, parseInt(form.aprMin) || 0);
+  const mqch = Math.max(0, parseInt(form.mqchMin) || 0);
+  const tAP = pause + chsg + apr + mqch;
+  const tR = Math.max(0, tO - tAP);
   const fermeture = 1440 - tO;
 
   const saveMutation = useMutation({
@@ -167,12 +189,12 @@ function EntryDialog({ open, onClose, entry, defaultDate, equipmentId, onSaved }
         notes: form.notes.trim() || null,
       };
       if (isEdit) {
-        return apiFetch(`/api/daily-entries/${entry!.id}`, {
+        return customFetch(`/api/daily-entries/${entry!.id}`, {
           method: "PATCH",
           body: JSON.stringify(payload),
         });
       }
-      return apiFetch("/api/daily-entries", {
+      return customFetch("/api/daily-entries", {
         method: "POST",
         body: JSON.stringify({
           ...payload,
@@ -194,7 +216,7 @@ function EntryDialog({ open, onClose, entry, defaultDate, equipmentId, onSaved }
 
   const validateMutation = useMutation({
     mutationFn: () =>
-      apiFetch(`/api/daily-entries/${entry!.id}`, {
+      customFetch(`/api/daily-entries/${entry!.id}`, {
         method: "PATCH",
         body: JSON.stringify({ status: "validated" }),
       }),
@@ -213,7 +235,12 @@ function EntryDialog({ open, onClose, entry, defaultDate, equipmentId, onSaved }
   const canValidate = isEdit && entry?.status === "draft" && isSupervisor;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -223,10 +250,14 @@ function EntryDialog({ open, onClose, entry, defaultDate, equipmentId, onSaved }
           {isEdit && (
             <p className="text-sm text-muted-foreground">
               {new Date(entry!.entryDate + "T00:00:00").toLocaleDateString("fr-FR", {
-                weekday: "long", day: "numeric", month: "long",
+                weekday: "long",
+                day: "numeric",
+                month: "long",
               })}
               {entry?.status === "validated" && (
-                <Badge variant="default" className="ml-2 bg-emerald-600">Validée</Badge>
+                <Badge variant="default" className="ml-2 bg-emerald-600">
+                  Validée
+                </Badge>
               )}
             </p>
           )}
@@ -235,11 +266,11 @@ function EntryDialog({ open, onClose, entry, defaultDate, equipmentId, onSaved }
         <div className="space-y-4 py-2">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <Label className="text-sm font-medium">
-                Temps d'ouverture tO (min)
-              </Label>
+              <Label className="text-sm font-medium">Temps d'ouverture tO (min)</Label>
               <Input
-                type="number" min="0" max="1440"
+                type="number"
+                min="0"
+                max="1440"
                 value={form.tOpeningMin}
                 onChange={set("tOpeningMin")}
                 placeholder="ex: 540"
@@ -253,19 +284,51 @@ function EntryDialog({ open, onClose, entry, defaultDate, equipmentId, onSaved }
 
             <div>
               <Label className="text-sm font-medium">Pause (min)</Label>
-              <Input type="number" min="0" max="1440" value={form.pauseMin} onChange={set("pauseMin")} className="mt-1" disabled={entry?.status === "validated"} />
+              <Input
+                type="number"
+                min="0"
+                max="1440"
+                value={form.pauseMin}
+                onChange={set("pauseMin")}
+                className="mt-1"
+                disabled={entry?.status === "validated"}
+              />
             </div>
             <div>
               <Label className="text-sm font-medium">Changement de série (min)</Label>
-              <Input type="number" min="0" max="1440" value={form.chsgMin} onChange={set("chsgMin")} className="mt-1" disabled={entry?.status === "validated"} />
+              <Input
+                type="number"
+                min="0"
+                max="1440"
+                value={form.chsgMin}
+                onChange={set("chsgMin")}
+                className="mt-1"
+                disabled={entry?.status === "validated"}
+              />
             </div>
             <div>
               <Label className="text-sm font-medium">APR (min)</Label>
-              <Input type="number" min="0" max="1440" value={form.aprMin} onChange={set("aprMin")} className="mt-1" disabled={entry?.status === "validated"} />
+              <Input
+                type="number"
+                min="0"
+                max="1440"
+                value={form.aprMin}
+                onChange={set("aprMin")}
+                className="mt-1"
+                disabled={entry?.status === "validated"}
+              />
             </div>
             <div>
               <Label className="text-sm font-medium">MQCH (min)</Label>
-              <Input type="number" min="0" max="1440" value={form.mqchMin} onChange={set("mqchMin")} className="mt-1" disabled={entry?.status === "validated"} />
+              <Input
+                type="number"
+                min="0"
+                max="1440"
+                value={form.mqchMin}
+                onChange={set("mqchMin")}
+                className="mt-1"
+                disabled={entry?.status === "validated"}
+              />
             </div>
           </div>
 
@@ -282,7 +345,9 @@ function EntryDialog({ open, onClose, entry, defaultDate, equipmentId, onSaved }
             </div>
             <div className="text-center">
               <div className="text-xs text-muted-foreground font-medium">tR</div>
-              <div className={cn("font-semibold", tR > 0 ? "text-emerald-600" : "text-red-500")}>{fmtMin(tR)}</div>
+              <div className={cn("font-semibold", tR > 0 ? "text-emerald-600" : "text-red-500")}>
+                {fmtMin(tR)}
+              </div>
               <div className="text-xs text-muted-foreground">{tR} min</div>
             </div>
           </div>
@@ -297,9 +362,11 @@ function EntryDialog({ open, onClose, entry, defaultDate, equipmentId, onSaved }
           <div>
             <Label className="text-sm font-medium">Notes</Label>
             <Textarea
-              value={form.notes} onChange={set("notes")}
+              value={form.notes}
+              onChange={set("notes")}
               placeholder="Observations, incidents journaliers…"
-              rows={2} className="mt-1 text-sm resize-none"
+              rows={2}
+              className="mt-1 text-sm resize-none"
               disabled={entry?.status === "validated"}
             />
           </div>
@@ -313,11 +380,17 @@ function EntryDialog({ open, onClose, entry, defaultDate, equipmentId, onSaved }
               onClick={() => validateMutation.mutate()}
               disabled={validateMutation.isPending}
             >
-              {validateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+              {validateMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+              )}
               Valider la fiche
             </Button>
           )}
-          <Button variant="outline" onClick={onClose}>Annuler</Button>
+          <Button variant="outline" onClick={onClose}>
+            Annuler
+          </Button>
           {entry?.status !== "validated" && (
             <Button
               onClick={() => saveMutation.mutate()}
@@ -335,12 +408,20 @@ function EntryDialog({ open, onClose, entry, defaultDate, equipmentId, onSaved }
 
 // ─── Delete confirm dialog ────────────────────────────────────────────────────
 
-function DeleteDialog({ entry, onClose, onDeleted }: { entry: DailyEntry; onClose: () => void; onDeleted: () => void }) {
+function DeleteDialog({
+  entry,
+  onClose,
+  onDeleted,
+}: {
+  entry: DailyEntry;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const deleteMutation = useMutation({
-    mutationFn: () => apiFetch(`/api/daily-entries/${entry.id}`, { method: "DELETE" }),
+    mutationFn: () => customFetch(`/api/daily-entries/${entry.id}`, { method: "DELETE" }),
     onSuccess: () => {
       toast({ title: "Fiche supprimée" });
       queryClient.invalidateQueries({ queryKey: ["daily-entries"] });
@@ -353,18 +434,33 @@ function DeleteDialog({ entry, onClose, onDeleted }: { entry: DailyEntry; onClos
   });
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>Supprimer la fiche ?</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Fiche du {new Date(entry.entryDate + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}.
-          Cette action est irréversible.
+          Fiche du{" "}
+          {new Date(entry.entryDate + "T00:00:00").toLocaleDateString("fr-FR", {
+            day: "numeric",
+            month: "long",
+          })}
+          . Cette action est irréversible.
         </p>
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose}>Annuler</Button>
-          <Button variant="destructive" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending}>
+          <Button variant="outline" onClick={onClose}>
+            Annuler
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => deleteMutation.mutate()}
+            disabled={deleteMutation.isPending}
+          >
             {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
             Supprimer
           </Button>
@@ -394,9 +490,9 @@ export default function DailyEntriesPage() {
   const isSupervisor = user?.role === "supervisor" || user?.role === "admin";
 
   const { data: equipments } = useListEquipments({ isActive: true } as any);
-  const activeEquipments = useMemo(() =>
-    (equipments ?? []).filter((e: any) => e.isActive !== false),
-    [equipments]
+  const activeEquipments = useMemo(
+    () => (equipments ?? []).filter((e: any) => e.isActive !== false),
+    [equipments],
   );
 
   const firstEquip = activeEquipments[0]?.id ?? "";
@@ -408,8 +504,8 @@ export default function DailyEntriesPage() {
   const { data: summary, isLoading } = useQuery<MonthlySummary>({
     queryKey: ["daily-entries", "summary", selectedEquipment, year, month],
     queryFn: () =>
-      apiFetch<MonthlySummary>(
-        `/api/daily-entries/monthly-summary?equipmentId=${selectedEquipment}&year=${year}&month=${month}`
+      customFetch<MonthlySummary>(
+        `/api/daily-entries/monthly-summary?equipmentId=${selectedEquipment}&year=${year}&month=${month}`,
       ),
     enabled: !!selectedEquipment,
   });
@@ -423,12 +519,16 @@ export default function DailyEntriesPage() {
   }, [summary]);
 
   function prevMonth() {
-    if (month === 1) { setYear(y => y - 1); setMonth(12); }
-    else setMonth(m => m - 1);
+    if (month === 1) {
+      setYear((y) => y - 1);
+      setMonth(12);
+    } else setMonth((m) => m - 1);
   }
   function nextMonth() {
-    if (month === 12) { setYear(y => y + 1); setMonth(1); }
-    else setMonth(m => m + 1);
+    if (month === 12) {
+      setYear((y) => y + 1);
+      setMonth(1);
+    } else setMonth((m) => m + 1);
   }
 
   function openCreate(date: string) {
@@ -480,7 +580,9 @@ export default function DailyEntriesPage() {
             </SelectTrigger>
             <SelectContent>
               {activeEquipments.map((eq: any) => (
-                <SelectItem key={eq.id} value={eq.id}>{eq.name}</SelectItem>
+                <SelectItem key={eq.id} value={eq.id}>
+                  {eq.name}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -512,12 +614,17 @@ export default function DailyEntriesPage() {
             <div className="text-2xl font-bold text-sky-600">{summary.daysWithEntries}</div>
             <div className="text-xs text-muted-foreground">/ {summary.daysInMonth} jours</div>
             <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
-              <div className="h-full bg-sky-500 rounded-full transition-all" style={{ width: `${completionPct}%` }} />
+              <div
+                className="h-full bg-sky-500 rounded-full transition-all"
+                style={{ width: `${completionPct}%` }}
+              />
             </div>
           </div>
           <div className="rounded-xl border bg-card p-4 text-center shadow-sm">
             <div className="text-xs text-muted-foreground font-medium mb-1">Σ tO mensuel</div>
-            <div className="text-2xl font-bold text-slate-700 dark:text-slate-200">{fmtMin(summary.totalTO)}</div>
+            <div className="text-2xl font-bold text-slate-700 dark:text-slate-200">
+              {fmtMin(summary.totalTO)}
+            </div>
             <div className="text-xs text-muted-foreground">{summary.totalTO} min</div>
           </div>
           <div className="rounded-xl border bg-card p-4 text-center shadow-sm">
@@ -527,7 +634,12 @@ export default function DailyEntriesPage() {
           </div>
           <div className="rounded-xl border bg-card p-4 text-center shadow-sm">
             <div className="text-xs text-muted-foreground font-medium mb-1">Σ tR mensuel</div>
-            <div className={cn("text-2xl font-bold", summary.totalTR > 0 ? "text-emerald-600" : "text-slate-400")}>
+            <div
+              className={cn(
+                "text-2xl font-bold",
+                summary.totalTR > 0 ? "text-emerald-600" : "text-slate-400",
+              )}
+            >
               {fmtMin(summary.totalTR)}
             </div>
             <div className="text-xs text-muted-foreground">{summary.totalTR} min</div>
@@ -555,7 +667,12 @@ export default function DailyEntriesPage() {
           <div className="grid grid-cols-7">
             {calendarCells.map((cell, idx) => {
               if (!cell) {
-                return <div key={`empty-${idx}`} className="min-h-[80px] border-b border-r border-border/50 bg-muted/20" />;
+                return (
+                  <div
+                    key={`empty-${idx}`}
+                    className="min-h-[80px] border-b border-r border-border/50 bg-muted/20"
+                  />
+                );
               }
 
               const entry = entryByDate.get(cell.date);
@@ -573,14 +690,16 @@ export default function DailyEntriesPage() {
                         ? "bg-emerald-50/60 dark:bg-emerald-950/20 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
                         : "bg-amber-50/60 dark:bg-amber-950/20 hover:bg-amber-50 dark:hover:bg-amber-950/30"
                       : "hover:bg-muted/30",
-                    isToday && "ring-2 ring-inset ring-sky-400"
+                    isToday && "ring-2 ring-inset ring-sky-400",
                   )}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className={cn(
-                      "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full",
-                      isToday ? "bg-sky-500 text-white" : "text-foreground"
-                    )}>
+                    <span
+                      className={cn(
+                        "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full",
+                        isToday ? "bg-sky-500 text-white" : "text-foreground",
+                      )}
+                    >
                       {cell.day}
                     </span>
                     {entry && (
@@ -617,14 +736,17 @@ export default function DailyEntriesPage() {
                   {entry ? (
                     <div className="space-y-0.5 text-xs">
                       <div className="flex items-center gap-1">
-                        {entry.status === "validated"
-                          ? <CheckCircle2 className="h-3 w-3 text-emerald-600 shrink-0" />
-                          : <Clock className="h-3 w-3 text-amber-500 shrink-0" />
-                        }
-                        <span className={cn(
-                          "font-medium",
-                          entry.status === "validated" ? "text-emerald-700" : "text-amber-700"
-                        )}>
+                        {entry.status === "validated" ? (
+                          <CheckCircle2 className="h-3 w-3 text-emerald-600 shrink-0" />
+                        ) : (
+                          <Clock className="h-3 w-3 text-amber-500 shrink-0" />
+                        )}
+                        <span
+                          className={cn(
+                            "font-medium",
+                            entry.status === "validated" ? "text-emerald-700" : "text-amber-700",
+                          )}
+                        >
                           {entry.status === "validated" ? "Validée" : "Brouillon"}
                         </span>
                       </div>
@@ -675,7 +797,10 @@ export default function DailyEntriesPage() {
       {dialogOpen && selectedEquipment && (
         <EntryDialog
           open={dialogOpen}
-          onClose={() => { setDialogOpen(false); setEditEntry(null); }}
+          onClose={() => {
+            setDialogOpen(false);
+            setEditEntry(null);
+          }}
           entry={editEntry}
           defaultDate={newEntryDate ?? todayISO()}
           equipmentId={selectedEquipment}
