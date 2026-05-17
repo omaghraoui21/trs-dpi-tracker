@@ -157,3 +157,60 @@ ALTER TABLE cadences DROP COLUMN IF EXISTS presentation_id;
 - **Migration**: Written but NOT executed (no Postgres available)
 - **Backfill**: Script written but NOT executed
 - **Generated files**: Written manually to match OpenAPI spec changes (orval codegen unavailable)
+
+---
+
+## Phase 6 hotfix (FEAT-004)
+
+Tightens three GO-blocking risks identified on PR #7. Strict no-refactor scope.
+
+### Risk 1 — Non-deterministic cadence pick in production-entries
+
+**Before**: `buildEntriesWithDetails` fetched `allCadences` for the product list and per entry did `allCadences.find(c => c.productId === ... && c.equipmentId === ...)`. With multi-presentation cadences, the chosen row was implementation-defined.
+
+**After**: per entry we resolve the default presentation via `resolveDefaultPresentationId(productId)` (memoized in a `Map<productId, presentationId|null>` for the current page) and look up the unique active triplet via `lookupActiveCadence({productId, equipmentId, presentationId})`. The partial unique index guarantees at most one match. If the product has no presentations, validatedCadence stays at 0 and `calculateTrsSafe` surfaces `MISSING_CADENCE` (route already integrated since FEAT-001).
+
+**Files**: `artifacts/api-server/src/routes/production-entries.ts` (imports + per-page resolution loop).
+
+### Risk 2 — Silent TRS=0 fallback in dashboard.ts and excelReportService.ts
+
+**dashboard.ts**:
+- `computeEntryMetrics` now calls `calculateTrsSafe`, returning `{metrics: TrsMetrics | null, error: TrsError | null}`.
+- `getEntriesWithMetrics` propagates `trsError` per entry.
+- `getMonthlyTrsResult`, daily-trs and weekly-trs aggregations filter null metrics before passing to `calculateMonthlyTrs[V2]`. Missing-cadence entries no longer silently dilute the average to 0%.
+- `pending-validations` route surfaces `trsError` alongside `trsMetrics` so the supervisor UI can flag rows that need a cadence.
+- Removed the now-unused `calculateTrs` import.
+
+**excelReportService.ts**:
+- `cadenceMap` re-keyed to triplet `${productId}:${equipmentId}:${presentationId}`, populated only from rows where `presentationId` is non-null. Default presentation per product memoized via `resolveDefaultPresentationId` outside the per-entry loop.
+- `EntryWithMetrics` gains a `trsValid: boolean` flag. When invalid, the entry keeps zero-shape numeric placeholders so other sheets stay structurally consistent, but the Dashboard TRS sheet renders an em dash in DO/TP/TQ/TRS/TRG/TRE columns and the status cell reads "— Cadence absente". The Synthese Direction aggregates and Statut Equipements averages exclude invalid rows entirely (no phantom 0%).
+
+**Files**: `artifacts/api-server/src/routes/dashboard.ts`, `artifacts/api-server/src/services/excelReportService.ts`.
+
+### Risk 3 — Codegen not regenerated
+
+`pnpm install --frozen-lockfile` is blocked by INTEGRATIONS_ONLY (403 on registry.npmjs.org), `pnpm-store` is empty, so `pnpm --filter @workspace/api-spec run codegen` cannot run locally. The OpenAPI spec has not changed since FEAT-002 so generated files in `lib/api-zod` and `lib/api-client-react` remain consistent. **Codegen MUST be rerun in CI/local with network access before merge** (commit message includes the directive).
+
+### Test deltas (Phase 6 hotfix)
+
+| File | Cases added |
+|------|-------------|
+| `production-entries-trs-error.test.ts` | +2 (deterministic triplet pick under multi-presentation, orphan-product fallback to MISSING_CADENCE) |
+| `dashboard-trs-error.test.ts` (new) | +4 (calculateTrsSafe contract; positive case; aggregation strictly higher than silent-fallback path; all-missing yields trs=null) |
+| **Total** | +6 |
+
+### Verification (Phase 6 hotfix)
+
+| Command | Outcome |
+|---------|---------|
+| `pnpm install --frozen-lockfile` | blocked: ERR_PNPM_FETCH_403 |
+| `pnpm run lint` | blocked: ESLint cannot find @eslint/js |
+| `pnpm run typecheck` | blocked: TS2688 Cannot find type definition file for 'node' (lib/db schema layer) |
+| `pnpm run test` | blocked: vitest not found |
+| `pnpm --filter @workspace/api-server run build` | blocked: esbuild not found |
+| `pnpm run build:frontend` | not run (same blocker family) |
+| `pnpm --filter @workspace/api-spec run codegen` | blocked: orval not found |
+| AST-level `tsc --noEmit` per modified file | clean (modulo identical pre-existing untyped `@workspace/db` import noise) |
+
+All blockers are environment-only (no node_modules under INTEGRATIONS_ONLY). The hotfix code is AST-clean. Re-run the full verification matrix in CI before merging.
+

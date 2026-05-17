@@ -19,7 +19,8 @@ import {
   productionPlansTable,
 } from "@workspace/db";
 import { eq, and, gte, lte, inArray, sql } from "drizzle-orm";
-import { calculateTrs, shiftDurationMinutes } from "../lib/trs-engine";
+import { calculateTrs, calculateTrsSafe, shiftDurationMinutes } from "../lib/trs-engine";
+import { resolveDefaultPresentationId } from "../lib/cadence-lookup";
 
 // ─── Theme ────────────────────────────────────────────────
 const T = {
@@ -182,6 +183,10 @@ interface EntryWithMetrics {
   unplannedMinutes: number;
   cadenceGap: number;
   totalArrêts: number;
+  /** Phase 6 hotfix: false when the underlying triplet has no active cadence
+   *  (calculateTrsSafe returned null). Excel rows render "—" for TRS columns
+   *  and these rows are excluded from synthese / equipment aggregates. */
+  trsValid: boolean;
   downtimeEvents: Array<{
     categoryCode: string | null;
     categoryLabel: string | null;
@@ -247,32 +252,64 @@ async function fetchEntriesWithMetrics(
       eq(downtimeEventsTable.isDeleted, false),
     ));
 
+  // Phase 6 hotfix: triplet-keyed cadence lookup (productId:equipmentId:presentationId)
+  // with deterministic default presentation per productId via cadence-lookup helpers.
+  // Replaces previous pair-only key which silently picked an arbitrary cadence row
+  // when multiple presentations existed for the same (product, equipment).
   const cadenceMap = new Map<string, number>();
   const allCadences = await db
     .select({
       productId: cadencesTable.productId,
       equipmentId: cadencesTable.equipmentId,
+      presentationId: cadencesTable.presentationId,
       validatedCadence: cadencesTable.validatedCadence,
     })
     .from(cadencesTable)
     .where(eq(cadencesTable.isActive, true));
   for (const c of allCadences) {
-    cadenceMap.set(`${c.productId}:${c.equipmentId}`, parseFloat(c.validatedCadence as unknown as string));
+    if (c.presentationId) {
+      cadenceMap.set(
+        `${c.productId}:${c.equipmentId}:${c.presentationId}`,
+        parseFloat(c.validatedCadence as unknown as string),
+      );
+    }
+  }
+
+  // Memoize default presentation per productId (avoids N+1 inside the per-entry loop).
+  const defaultPresentationCache = new Map<string, string | null>();
+  const uniqueProductIds = [...new Set(entries.map(e => e.productId))];
+  for (const pid of uniqueProductIds) {
+    defaultPresentationCache.set(pid, await resolveDefaultPresentationId(pid));
   }
 
   return entries.map(entry => {
     const entryDowntimes = downtimes.filter(d => d.entryId === entry.id);
     const plannedMinutes = entryDowntimes.filter(d => d.isPlanned).reduce((s, d) => s + d.durationMinutes, 0);
     const unplannedMinutes = entryDowntimes.filter(d => !d.isPlanned).reduce((s, d) => s + d.durationMinutes, 0);
-    const validatedCadence = cadenceMap.get(`${entry.productId}:${entry.equipmentId}`) ?? 0;
+    const presentationId = defaultPresentationCache.get(entry.productId) ?? null;
+    const validatedCadence = presentationId
+      ? cadenceMap.get(`${entry.productId}:${entry.equipmentId}:${presentationId}`) ?? 0
+      : 0;
     const shiftDuration = shiftDurationMinutes(entry.shiftStart, entry.shiftEnd);
-    const metrics = calculateTrs({
+    // Phase 6 hotfix: fail-loud on missing cadence. metrics === null → row marked invalid.
+    const { metrics: safeMetrics } = calculateTrsSafe({
       shiftDurationMinutes: shiftDuration,
       plannedDowntimeMinutes: plannedMinutes,
       unplannedDowntimeMinutes: unplannedMinutes,
       quantityProduced: entry.quantityProduced,
       quantityConforming: entry.quantityConforming,
       validatedCadence,
+    });
+    const trsValid = safeMetrics !== null;
+    // Fallback to zero-metrics shape when invalid so downstream sheet builders
+    // still have numeric placeholders; the trsValid flag drives display + aggregation.
+    const metrics = safeMetrics ?? calculateTrs({
+      shiftDurationMinutes: shiftDuration,
+      plannedDowntimeMinutes: plannedMinutes,
+      unplannedDowntimeMinutes: unplannedMinutes,
+      quantityProduced: entry.quantityProduced,
+      quantityConforming: entry.quantityConforming,
+      validatedCadence: 0,
     });
 
     return {
@@ -296,6 +333,7 @@ async function fetchEntriesWithMetrics(
       unplannedMinutes,
       cadenceGap: metrics.cadenceGap,
       totalArrêts: entryDowntimes.length,
+      trsValid,
       downtimeEvents: entryDowntimes.map(d => ({
         categoryCode: d.categoryCode ?? null,
         categoryLabel: d.categoryLabel ?? null,
@@ -530,14 +568,15 @@ function buildDashboardTrsSheet(
       { formula: tF_ref },
       { formula: tN_ref },
       { formula: tU_ref },
-      { formula: `=IF(${tR_ref}>0,${tF_ref}/${tR_ref},0)` },  // DO
-      { formula: `=IF(${tF_ref}>0,${tN_ref}/${tF_ref},0)` },  // TP
-      { formula: `=IF(${tN_ref}>0,${tU_ref}/${tN_ref},0)` },  // TQ
-      { formula: `=IF(${tR_ref}>0,${tU_ref}/${tR_ref},0)` },  // TRS
-      { formula: `=IF(${tO_ref}>0,${tU_ref}/${tO_ref},0)` },  // TRG
-      { formula: `=IF(${tT_ref}>0,${tU_ref}/${tT_ref},0)` },  // TRE
+      // Phase 6 hotfix: render dash placeholder when cadence is missing — never a phantom 0%.
+      e.trsValid ? { formula: `=IF(${tR_ref}>0,${tF_ref}/${tR_ref},0)` } : "—",  // DO
+      e.trsValid ? { formula: `=IF(${tF_ref}>0,${tN_ref}/${tF_ref},0)` } : "—",  // TP
+      e.trsValid ? { formula: `=IF(${tN_ref}>0,${tU_ref}/${tN_ref},0)` } : "—",  // TQ
+      e.trsValid ? { formula: `=IF(${tR_ref}>0,${tU_ref}/${tR_ref},0)` } : "—",  // TRS
+      e.trsValid ? { formula: `=IF(${tO_ref}>0,${tU_ref}/${tO_ref},0)` } : "—",  // TRG
+      e.trsValid ? { formula: `=IF(${tT_ref}>0,${tU_ref}/${tT_ref},0)` } : "—",  // TRE
       e.totalArrêts,
-      e.TRS >= 0.85 ? "✔ Conforme" : e.TRS >= 0.70 ? "⚠ Vigilance" : "✖ Critique",
+      !e.trsValid ? "— Cadence absente" : e.TRS >= 0.85 ? "✔ Conforme" : e.TRS >= 0.70 ? "⚠ Vigilance" : "✖ Critique",
     ];
 
     cells.forEach((val, ci) => {
@@ -767,14 +806,17 @@ function buildSyntheseSheet(
   ws.getRow(1).height = 36;
   ws.getRow(2).height = 22;
 
-  // Compute aggregates
+  // Compute aggregates — Phase 6 hotfix: exclude rows with invalid (missing-cadence) TRS
+  // from numerator AND denominator so monthly TRS is computed only over rows where the
+  // cadence triplet is known. totalArrêts/totalQty stay over all rows (volume views).
+  const validEntries = entries.filter(e => e.trsValid);
   const n = entries.length;
-  const totalTR  = entries.reduce((s,e) => s + e.tR, 0);
-  const totalTU  = entries.reduce((s,e) => s + e.tU, 0);
-  const totalTF  = entries.reduce((s,e) => s + e.tF, 0);
-  const totalTN  = entries.reduce((s,e) => s + e.tN, 0);
-  const totalTO  = entries.reduce((s,e) => s + e.tO, 0);
-  const totalTT  = n * 1440;
+  const totalTR  = validEntries.reduce((s,e) => s + e.tR, 0);
+  const totalTU  = validEntries.reduce((s,e) => s + e.tU, 0);
+  const totalTF  = validEntries.reduce((s,e) => s + e.tF, 0);
+  const totalTN  = validEntries.reduce((s,e) => s + e.tN, 0);
+  const totalTO  = validEntries.reduce((s,e) => s + e.tO, 0);
+  const totalTT  = validEntries.length * 1440;
   const totalArrêts = entries.reduce((s,e) => s + e.totalArrêts, 0);
   const totalDowntime = entries.reduce((s,e) => s + e.plannedMinutes + e.unplannedMinutes, 0);
   const totalQtyProd = entries.reduce((s,e) => s + e.quantityProduced, 0);
@@ -979,9 +1021,11 @@ function buildEquipmentStatusSheet(wb: ExcelJS.Workbook, entries: EntryWithMetri
   COLS.forEach((c, i) => { hRow.getCell(i + 1).value = c.header; hRow.getCell(i + 1).style = headerStyle(); });
   ws.views = [{ state: "frozen", ySplit: 3 }];
 
-  // Aggregate by equipment
+  // Aggregate by equipment — Phase 6 hotfix: only sum TRS from rows with a valid
+  // triplet cadence (trsValid). Other counters (count, totalArrêts, downtime) remain
+  // over all rows so volume views stay accurate.
   const equipMap = new Map<string, {
-    name: string; count: number; sumTRS: number; totalArrêts: number;
+    name: string; count: number; trsCount: number; sumTRS: number; totalArrêts: number;
     totalDowntime: number; lastProduct: string | null; lastLot: string;
   }>();
   for (const e of entries) {
@@ -989,7 +1033,7 @@ function buildEquipmentStatusSheet(wb: ExcelJS.Workbook, entries: EntryWithMetri
     const ex = equipMap.get(key);
     if (ex) {
       ex.count++;
-      ex.sumTRS += e.TRS;
+      if (e.trsValid) { ex.sumTRS += e.TRS; ex.trsCount++; }
       ex.totalArrêts += e.totalArrêts;
       ex.totalDowntime += e.plannedMinutes + e.unplannedMinutes;
       ex.lastProduct = e.productName;
@@ -997,7 +1041,10 @@ function buildEquipmentStatusSheet(wb: ExcelJS.Workbook, entries: EntryWithMetri
     } else {
       equipMap.set(key, {
         name: e.equipmentName ?? key,
-        count: 1, sumTRS: e.TRS, totalArrêts: e.totalArrêts,
+        count: 1,
+        trsCount: e.trsValid ? 1 : 0,
+        sumTRS: e.trsValid ? e.TRS : 0,
+        totalArrêts: e.totalArrêts,
         totalDowntime: e.plannedMinutes + e.unplannedMinutes,
         lastProduct: e.productName, lastLot: e.batchNumber,
       });
@@ -1018,7 +1065,10 @@ function buildEquipmentStatusSheet(wb: ExcelJS.Workbook, entries: EntryWithMetri
   for (const [, eq] of equipMap) {
     const row = ws.getRow(rowIdx++);
     row.height = 20;
-    const avgTRS = eq.count > 0 ? eq.sumTRS / eq.count : 0;
+    // Phase 6 hotfix: average only over rows with valid cadence (trsCount).
+    // When zero valid rows, render dash instead of phantom 0%.
+    const hasValid = eq.trsCount > 0;
+    const avgTRS = hasValid ? eq.sumTRS / eq.trsCount : 0;
 
     row.getCell(1).value = eq.name;
     row.getCell(1).style = dataStyle(true, "left");
@@ -1033,8 +1083,13 @@ function buildEquipmentStatusSheet(wb: ExcelJS.Workbook, entries: EntryWithMetri
     row.getCell(4).style = dataStyle(false,"center");
     row.getCell(5).value = eq.count;
     row.getCell(5).style = dataStyle(false,"center");
-    row.getCell(6).value = avgTRS;
-    row.getCell(6).style = pctStyle(true);
+    if (hasValid) {
+      row.getCell(6).value = avgTRS;
+      row.getCell(6).style = pctStyle(true);
+    } else {
+      row.getCell(6).value = "—";
+      row.getCell(6).style = dataStyle(true, "center");
+    }
     row.getCell(7).value = eq.totalArrêts;
     row.getCell(7).style = dataStyle(false,"center");
     row.getCell(8).value = eq.totalDowntime;
