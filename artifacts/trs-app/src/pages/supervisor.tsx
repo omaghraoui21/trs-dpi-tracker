@@ -999,6 +999,28 @@ export default function SupervisorPage() {
         equipments={equipments?.map((e) => ({ id: e.id, name: e.name, code: e.code })) ?? []}
       />
 
+      {(() => {
+        const missing =
+          (summary as { entriesWithMissingCadence?: number } | undefined)
+            ?.entriesWithMissingCadence ?? 0;
+        if (missing === 0) return null;
+        return (
+          <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+            <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <div className="font-semibold text-amber-500">
+                {missing} saisie{missing > 1 ? "s" : ""} sans cadence configurée
+              </div>
+              <div className="text-amber-200/80 text-xs mt-0.5">
+                Les TRS, TP et TQ de ces saisies sont à 0 par défaut faute de cadence — ils minorent
+                le TRS consolidé. Configurez la cadence (équipement × produit) dans Paramétrage pour
+                corriger.
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* KPI Row */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <KpiCard
@@ -1356,31 +1378,47 @@ export default function SupervisorPage() {
           </h2>
           {comparison && comparison.length > 0 ? (
             <div className="space-y-5">
-              {comparison.map((eq) => (
-                <div key={eq.equipmentId} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium truncate">{eq.equipmentName}</span>
-                    <Badge style={{ background: trsColor(eq.trs), color: "white" }}>
-                      TRS {trsLabel(eq.trs)}
-                    </Badge>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2 text-xs">
-                    {[
-                      { l: "TRG", v: (eq as { TRG?: number | null }).TRG ?? null },
-                      { l: "DO", v: eq.DO },
-                      { l: "TP", v: eq.TP },
-                      { l: "TQ", v: eq.TQ },
-                    ].map(({ l, v }) => (
-                      <div key={l} className="bg-muted rounded-lg p-2.5 text-center">
-                        <div className="text-muted-foreground">{l}</div>
-                        <div className="font-bold text-sm" style={{ color: trsColor(v) }}>
-                          {trsLabel(v)}
+              {comparison.map((eq) => {
+                const missing =
+                  (eq as { entriesWithMissingCadence?: number }).entriesWithMissingCadence ?? 0;
+                return (
+                  <div key={eq.equipmentId} className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium truncate flex-1">
+                        {eq.equipmentName}
+                      </span>
+                      {missing > 0 && (
+                        <Badge
+                          variant="outline"
+                          className="border-amber-500/40 text-amber-500 text-[10px] flex items-center gap-1"
+                          title={`${missing} saisie${missing > 1 ? "s" : ""} sans cadence configurée — TRS minoré`}
+                        >
+                          <AlertTriangle className="h-3 w-3" />
+                          Cadence manquante
+                        </Badge>
+                      )}
+                      <Badge style={{ background: trsColor(eq.trs), color: "white" }}>
+                        TRS {trsLabel(eq.trs)}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 text-xs">
+                      {[
+                        { l: "TRG", v: (eq as { TRG?: number | null }).TRG ?? null },
+                        { l: "DO", v: eq.DO },
+                        { l: "TP", v: eq.TP },
+                        { l: "TQ", v: eq.TQ },
+                      ].map(({ l, v }) => (
+                        <div key={l} className="bg-muted rounded-lg p-2.5 text-center">
+                          <div className="text-muted-foreground">{l}</div>
+                          <div className="font-bold text-sm" style={{ color: trsColor(v) }}>
+                            {trsLabel(v)}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">

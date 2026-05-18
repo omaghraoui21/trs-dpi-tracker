@@ -878,41 +878,27 @@ function CadencesTab() {
             </tr>
           </thead>
           <tbody>
-            {cadences?.map(
-              (c: {
-                id: string;
-                productId: string;
-                equipmentId: string;
-                productName?: string;
-                equipmentName?: string;
-                theoreticalCadence: number;
-                validatedCadence: number;
-                unit: string;
-                isActive?: boolean;
-              }) => (
-                <tr
-                  key={c.id}
-                  className="border-b border-border/50 hover:bg-muted/30 transition-colors"
-                >
-                  <td className="px-4 py-3 whitespace-nowrap">{c.productName}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">{c.equipmentName}</td>
-                  <td className="px-4 py-3 tabular-nums">
-                    {c.theoreticalCadence.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 tabular-nums font-bold">
-                    {c.validatedCadence.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">{c.unit}</td>
-                  <td className="px-4 py-3">
-                    {c.isActive !== false ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <XCircle className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </td>
-                </tr>
-              ),
-            )}
+            {cadences?.map((c) => (
+              <tr
+                key={c.id}
+                className="border-b border-border/50 hover:bg-muted/30 transition-colors"
+              >
+                <td className="px-4 py-3 whitespace-nowrap">{c.productName}</td>
+                <td className="px-4 py-3 whitespace-nowrap">{c.equipmentName}</td>
+                <td className="px-4 py-3 tabular-nums">{c.theoreticalCadence.toLocaleString()}</td>
+                <td className="px-4 py-3 tabular-nums font-bold">
+                  {c.validatedCadence.toLocaleString()}
+                </td>
+                <td className="px-4 py-3 text-muted-foreground text-xs">{c.unit}</td>
+                <td className="px-4 py-3">
+                  {c.isActive !== false ? (
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </TableWrapper>

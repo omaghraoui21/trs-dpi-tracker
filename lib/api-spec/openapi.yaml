@@ -347,6 +347,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Cadence"
+        "409":
+          description: Conflict — another active cadence already exists for this (equipment, product, presentation)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /cadences/{id}:
+    delete:
+      operationId: deactivateCadence
+      tags: [products]
+      summary: Soft-delete (deactivate) a cadence
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Cadence deactivated
+        "404":
+          description: Cadence not found
 
   # Downtime categories
   /downtime-categories:
@@ -1095,6 +1119,13 @@ components:
       required:
         - status
 
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
     # Auth
     LoginBody:
       type: object
@@ -1236,6 +1267,18 @@ components:
         createdAt:
           type: string
           format: date-time
+        presentations:
+          type: array
+          description: Active presentations for this product (blister, pochette, etc.)
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              name:
+                type: string
+            required: [id, name]
       required: [id, name, code, isActive, createdAt]
 
     CreateProductBody:
@@ -1274,6 +1317,10 @@ components:
         equipmentId:
           type: string
           format: uuid
+        presentationId:
+          type: ["string", "null"]
+          format: uuid
+          description: Optional product presentation (blister, pochette, etc.) — null = applies to all presentations of the product
         theoreticalCadence:
           type: number
           description: Theoretical cadence (units/hour)
@@ -1283,11 +1330,31 @@ components:
         unit:
           type: string
           description: Unit (blisters/min, capsules/min, etc.)
+        validFrom:
+          type: string
+          format: date
+        validTo:
+          type: ["string", "null"]
+          format: date
+        isActive:
+          type: boolean
         productName:
           type: ["string", "null"]
         equipmentName:
           type: ["string", "null"]
-      required: [id, productId, equipmentId, theoreticalCadence, validatedCadence, unit]
+        presentationName:
+          type: ["string", "null"]
+      required:
+        [
+          id,
+          productId,
+          equipmentId,
+          theoreticalCadence,
+          validatedCadence,
+          unit,
+          validFrom,
+          isActive,
+        ]
 
     UpsertCadenceBody:
       type: object
@@ -1298,12 +1365,18 @@ components:
         equipmentId:
           type: string
           format: uuid
+        presentationId:
+          type: ["string", "null"]
+          format: uuid
         theoreticalCadence:
           type: number
         validatedCadence:
           type: number
         unit:
           type: string
+        validFrom:
+          type: string
+          format: date
       required: [productId, equipmentId, theoreticalCadence, validatedCadence, unit]
 
     # Downtime Category
@@ -1487,7 +1560,24 @@ components:
         updatedAt:
           type: string
           format: date-time
-      required: [id, date, equipmentId, productId, batchNumber, shift, shiftStart, shiftEnd, quantityProduced, quantityConforming, quantityRejected, status, operatorId, createdAt, updatedAt]
+      required:
+        [
+          id,
+          date,
+          equipmentId,
+          productId,
+          batchNumber,
+          shift,
+          shiftStart,
+          shiftEnd,
+          quantityProduced,
+          quantityConforming,
+          quantityRejected,
+          status,
+          operatorId,
+          createdAt,
+          updatedAt,
+        ]
 
     ProductionEntryWithDetails:
       allOf:
@@ -1519,6 +1609,9 @@ components:
         productId:
           type: string
           format: uuid
+        presentationId:
+          type: ["string", "null"]
+          format: uuid
         batchNumber:
           type: string
         shift:
@@ -1533,7 +1626,19 @@ components:
           type: integer
         quantityRejected:
           type: integer
-      required: [date, equipmentId, productId, batchNumber, shift, shiftStart, shiftEnd, quantityProduced, quantityConforming, quantityRejected]
+      required:
+        [
+          date,
+          equipmentId,
+          productId,
+          batchNumber,
+          shift,
+          shiftStart,
+          shiftEnd,
+          quantityProduced,
+          quantityConforming,
+          quantityRejected,
+        ]
 
     UpdateProductionEntryBody:
       type: object
@@ -1546,6 +1651,9 @@ components:
           format: uuid
         productId:
           type: string
+          format: uuid
+        presentationId:
+          type: ["string", "null"]
           format: uuid
         batchNumber:
           type: string
@@ -1619,7 +1727,24 @@ components:
         cadenceGap:
           type: number
           description: Gap between validated and actual cadence
-      required: [tT, tO, tR, tF, tN, tU, DO, TP, TQ, TRS, TRG, TRE, plannedDowntimeMinutes, unplannedDowntimeMinutes, cadenceGap]
+      required:
+        [
+          tT,
+          tO,
+          tR,
+          tF,
+          tN,
+          tU,
+          DO,
+          TP,
+          TQ,
+          TRS,
+          TRG,
+          TRE,
+          plannedDowntimeMinutes,
+          unplannedDowntimeMinutes,
+          cadenceGap,
+        ]
 
     # Dashboard types
     DashboardSummary:
@@ -1656,7 +1781,23 @@ components:
           type: integer
         totalRejected:
           type: integer
-      required: [currentMonthTrs, currentMonthDO, currentMonthTP, currentMonthTQ, trsObjective, entriesThisMonth, pendingValidations, validatedEntries, rejectedEntries, productionDays, offDays, totalQuantityProduced, totalQuantityConforming, totalRejected]
+      required:
+        [
+          currentMonthTrs,
+          currentMonthDO,
+          currentMonthTP,
+          currentMonthTQ,
+          trsObjective,
+          entriesThisMonth,
+          pendingValidations,
+          validatedEntries,
+          rejectedEntries,
+          productionDays,
+          offDays,
+          totalQuantityProduced,
+          totalQuantityConforming,
+          totalRejected,
+        ]
 
     DailyTrsPoint:
       type: object
@@ -1706,7 +1847,16 @@ components:
           type: number
         isPlanned:
           type: boolean
-      required: [categoryCode, categoryLabel, totalMinutes, occurrences, percentage, cumulativePercentage, isPlanned]
+      required:
+        [
+          categoryCode,
+          categoryLabel,
+          totalMinutes,
+          occurrences,
+          percentage,
+          cumulativePercentage,
+          isPlanned,
+        ]
 
     EquipmentComparisonItem:
       type: object
@@ -1768,7 +1918,18 @@ components:
           type: number
         totalDowntimeUnplanned:
           type: number
-      required: [month, year, trsObjective, totalTR, totalTU, totalTF, totalTN, totalDowntimePlanned, totalDowntimeUnplanned]
+      required:
+        [
+          month,
+          year,
+          trsObjective,
+          totalTR,
+          totalTU,
+          totalTF,
+          totalTN,
+          totalDowntimePlanned,
+          totalDowntimeUnplanned,
+        ]
 
     # Monthly closures
     MonthlyClosure:
@@ -1912,7 +2073,18 @@ components:
           type: string
         importedByName:
           type: ["string", "null"]
-      required: [id, weekNumber, year, date, dayName, activityType, sourceFileName, importedAt, validationStatus]
+      required:
+        [
+          id,
+          weekNumber,
+          year,
+          date,
+          dayName,
+          activityType,
+          sourceFileName,
+          importedAt,
+          validationStatus,
+        ]
 
     PlanWeekSummary:
       type: object

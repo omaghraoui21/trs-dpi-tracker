@@ -16,6 +16,7 @@ import {
   FileText,
   ClipboardList,
   BookOpen,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -146,6 +147,7 @@ interface MonthlyKpisResult {
   totalDowntimePlanned: number;
   totalDowntimeUnplanned: number;
   source: "daily" | "production";
+  entriesWithMissingCadence?: number;
 }
 
 interface DailySummaryDay {
@@ -694,6 +696,16 @@ export default function AnalysisPage() {
                   {Math.round(monthlyKpis.totalTR)} min
                 </span>
               </span>
+              {(monthlyKpis.entriesWithMissingCadence ?? 0) > 0 && (
+                <span
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25 font-medium"
+                  title="TRS minoré — cadences à configurer dans Paramétrage"
+                >
+                  <AlertTriangle className="h-3 w-3" />
+                  {monthlyKpis.entriesWithMissingCadence} saisie
+                  {(monthlyKpis.entriesWithMissingCadence ?? 0) > 1 ? "s" : ""} sans cadence
+                </span>
+              )}
             </div>
           )}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

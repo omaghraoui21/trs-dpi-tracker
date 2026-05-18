@@ -1202,6 +1202,7 @@ function LotStartForm({
   const [activityType, setActivityType] = useState<"production" | "nettoyage">("production");
   const [equipmentId, setEquipmentId] = useState("");
   const [productId, setProductId] = useState("");
+  const [presentationId, setPresentationId] = useState<string>("");
   const [batchNumber, setBatchNumber] = useState("");
   const [batchSuggested, setBatchSuggested] = useState(false);
   const [shiftMode, setShiftMode] = useState<ShiftMode>("standard");
@@ -1231,6 +1232,25 @@ function LotStartForm({
       })
       .catch(() => {});
   }, [productId, activityType]);
+
+  // Auto-select the single presentation when the product has only one, reset when product changes
+  const currentProduct = useMemo(
+    () => (products ?? []).find((p) => p.id === productId),
+    [products, productId],
+  );
+  const productPresentations = useMemo(
+    () =>
+      (currentProduct as { presentations?: Array<{ id: string; name: string }> } | undefined)
+        ?.presentations ?? [],
+    [currentProduct],
+  );
+  useEffect(() => {
+    if (productPresentations.length === 1) {
+      setPresentationId(productPresentations[0].id);
+    } else {
+      setPresentationId("");
+    }
+  }, [productId, productPresentations.length]);
 
   // When switching to nettoyage: auto-assign NETT product and fetch batch suggestion
   useEffect(() => {
@@ -1287,6 +1307,7 @@ function LotStartForm({
           date: today,
           equipmentId,
           productId: activityType === "nettoyage" ? nettProduct!.id : productId,
+          presentationId: activityType === "production" && presentationId ? presentationId : null,
           batchNumber:
             batchNumber.trim() ||
             (activityType === "nettoyage" ? `NT${today.replace(/-/g, "")}` : ""),
@@ -1412,6 +1433,27 @@ function LotStartForm({
                 </SelectContent>
               </Select>
             </div>
+
+            {productPresentations.length >= 2 && (
+              <div className="space-y-2">
+                <Label>Présentation</Label>
+                <Select value={presentationId} onValueChange={setPresentationId}>
+                  <SelectTrigger className="h-12">
+                    <SelectValue placeholder="Sélectionner la présentation…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {productPresentations.map((p) => (
+                      <SelectItem key={p.id} value={p.id} className="py-3">
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Détermine la cadence appliquée pour ce lot.
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label className="flex items-center gap-2">

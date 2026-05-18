@@ -20,6 +20,7 @@ const CreateEntrySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format de date invalide (YYYY-MM-DD)"),
   equipmentId: z.string().uuid("equipmentId invalide"),
   productId: z.string().uuid("productId invalide"),
+  presentationId: z.string().uuid().nullable().optional(),
   batchNumber: z.string().min(1, "Numéro de lot requis"),
   shift: z.string().min(1, "Poste requis"),
   shiftStart: z.string().regex(/^\d{2}:\d{2}$/, "shiftStart doit être HH:MM"),
@@ -332,6 +333,7 @@ router.post("/production-entries", requireAuth, async (req, res): Promise<void> 
       date,
       equipmentId,
       productId,
+      presentationId,
       batchNumber,
       shift,
       shiftStart,
@@ -354,6 +356,7 @@ router.post("/production-entries", requireAuth, async (req, res): Promise<void> 
         date,
         equipmentId,
         productId,
+        presentationId: presentationId ?? null,
         batchNumber,
         shift,
         shiftStart,
@@ -430,6 +433,7 @@ router.patch("/production-entries/:id", requireAuth, async (req, res): Promise<v
       date,
       equipmentId,
       productId,
+      presentationId,
       batchNumber,
       shift,
       shiftStart,
@@ -443,6 +447,8 @@ router.patch("/production-entries/:id", requireAuth, async (req, res): Promise<v
     if (date !== undefined) updatePayload.date = String(date);
     if (equipmentId !== undefined) updatePayload.equipmentId = String(equipmentId);
     if (productId !== undefined) updatePayload.productId = String(productId);
+    if (presentationId !== undefined)
+      updatePayload.presentationId = presentationId === null ? null : String(presentationId);
     if (batchNumber !== undefined) updatePayload.batchNumber = String(batchNumber);
     if (shift !== undefined) updatePayload.shift = String(shift);
     if (shiftStart !== undefined) updatePayload.shiftStart = String(shiftStart);
