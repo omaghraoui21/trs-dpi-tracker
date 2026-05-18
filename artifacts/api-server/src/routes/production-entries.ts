@@ -32,30 +32,40 @@ const CreateEntrySchema = z.object({
 const router: IRouter = Router();
 
 // ─── Next batch-number suggestion ────────────────────────
-router.get("/production-entries/next-batch-number", requireAuth, async (req, res): Promise<void> => {
-  const now = new Date();
-  const yy = String(now.getFullYear()).slice(-2);
-  const yearStart = `${now.getFullYear()}-01-01`;
-  const yearEnd   = `${now.getFullYear()}-12-31`;
+router.get(
+  "/production-entries/next-batch-number",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(-2);
+    const yearStart = `${now.getFullYear()}-01-01`;
+    const yearEnd = `${now.getFullYear()}-12-31`;
 
-  const productId = req.query.productId ? String(req.query.productId) : null;
-  const baseFilters = [gte(productionEntriesTable.date, yearStart), lte(productionEntriesTable.date, yearEnd)] as ReturnType<typeof eq>[];
-  if (productId) baseFilters.push(eq(productionEntriesTable.productId, productId));
+    const productId = req.query.productId ? String(req.query.productId) : null;
+    const baseFilters = [
+      gte(productionEntriesTable.date, yearStart),
+      lte(productionEntriesTable.date, yearEnd),
+    ] as ReturnType<typeof eq>[];
+    if (productId) baseFilters.push(eq(productionEntriesTable.productId, productId));
 
-  const rows = await db
-    .select({ batchNumber: productionEntriesTable.batchNumber })
-    .from(productionEntriesTable)
-    .where(and(...baseFilters));
+    const rows = await db
+      .select({ batchNumber: productionEntriesTable.batchNumber })
+      .from(productionEntriesTable)
+      .where(and(...baseFilters));
 
-  const pattern = new RegExp(`^(?:[A-Z]{1,4})?${yy}(\\d+)$`);
-  let maxSeq = 0;
-  for (const r of rows) {
-    const m = r.batchNumber.match(pattern);
-    if (m) { const n = parseInt(m[1], 10); if (n > maxSeq) maxSeq = n; }
-  }
-  const suggestion = `${yy}${String(maxSeq + 1).padStart(3, "0")}`;
-  res.json({ suggestion, year: now.getFullYear(), sequence: maxSeq + 1 });
-});
+    const pattern = new RegExp(`^(?:[A-Z]{1,4})?${yy}(\\d+)$`);
+    let maxSeq = 0;
+    for (const r of rows) {
+      const m = r.batchNumber.match(pattern);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (n > maxSeq) maxSeq = n;
+      }
+    }
+    const suggestion = `${yy}${String(maxSeq + 1).padStart(3, "0")}`;
+    res.json({ suggestion, year: now.getFullYear(), sequence: maxSeq + 1 });
+  },
+);
 
 // ─── Types ───────────────────────────────────────────────
 type EntryRow = {
@@ -63,6 +73,7 @@ type EntryRow = {
   date: string;
   equipmentId: string;
   productId: string;
+  presentationId: string | null;
   batchNumber: string;
   shift: string;
   shiftStart: string;
@@ -106,6 +117,7 @@ async function buildEntriesWithDetails(entryIds: string[]) {
       date: productionEntriesTable.date,
       equipmentId: productionEntriesTable.equipmentId,
       productId: productionEntriesTable.productId,
+      presentationId: productionEntriesTable.presentationId,
       batchNumber: productionEntriesTable.batchNumber,
       shift: productionEntriesTable.shift,
       shiftStart: productionEntriesTable.shiftStart,
@@ -147,22 +159,29 @@ async function buildEntriesWithDetails(entryIds: string[]) {
       categoryIsPlanned: downtimeCategoriesTable.isPlanned,
     })
     .from(downtimeEventsTable)
-    .leftJoin(downtimeCategoriesTable, eq(downtimeEventsTable.categoryId, downtimeCategoriesTable.id))
+    .leftJoin(
+      downtimeCategoriesTable,
+      eq(downtimeEventsTable.categoryId, downtimeCategoriesTable.id),
+    )
     .where(
-      and(
-        inArray(downtimeEventsTable.entryId, entryIds),
-        eq(downtimeEventsTable.isDeleted, false)
-      )
+      and(inArray(downtimeEventsTable.entryId, entryIds), eq(downtimeEventsTable.isDeleted, false)),
     );
 
-  const pairs = [...new Map(entries.map(e => [`${e.productId}-${e.equipmentId}`, { productId: e.productId, equipmentId: e.equipmentId }])).values()];
-  const uniqueProductIds = [...new Set(pairs.map(p => p.productId))];
-  const allCadences = uniqueProductIds.length > 0
-    ? await db
-        .select()
-        .from(cadencesTable)
-        .where(inArray(cadencesTable.productId, uniqueProductIds))
-    : [];
+  const uniqueProductIds = [...new Set(entries.map((e) => e.productId))];
+  const uniqueEquipmentIds = [...new Set(entries.map((e) => e.equipmentId))];
+  const allCadences =
+    uniqueProductIds.length > 0
+      ? await db
+          .select()
+          .from(cadencesTable)
+          .where(
+            and(
+              eq(cadencesTable.isActive, true),
+              inArray(cadencesTable.productId, uniqueProductIds),
+              inArray(cadencesTable.equipmentId, uniqueEquipmentIds),
+            ),
+          )
+      : [];
 
   const downtimesByEntry = new Map<string, DowntimeRow[]>();
   for (const d of allDowntimes) {
@@ -172,12 +191,27 @@ async function buildEntriesWithDetails(entryIds: string[]) {
 
   return entries.map((entry: EntryRow) => {
     const downtimeRows = downtimesByEntry.get(entry.id) ?? [];
-    const cadence = allCadences.find(
-      c => c.productId === entry.productId && c.equipmentId === entry.equipmentId
+    // Apply same matching rules as dashboard: active + in date range + presentation (exact → null fallback) → most recent validFrom
+    const inRange = allCadences.filter(
+      (c) =>
+        c.productId === entry.productId &&
+        c.equipmentId === entry.equipmentId &&
+        c.validFrom <= entry.date &&
+        (c.validTo === null || c.validTo >= entry.date),
     );
-    const validatedCadence = cadence ? parseFloat(cadence.validatedCadence as unknown as string) : 0;
-    const plannedMinutes = downtimeRows.filter(d => d.categoryIsPlanned).reduce((s, d) => s + d.durationMinutes, 0);
-    const unplannedMinutes = downtimeRows.filter(d => !d.categoryIsPlanned).reduce((s, d) => s + d.durationMinutes, 0);
+    const exact = inRange.filter((c) => c.presentationId === entry.presentationId);
+    const matches = exact.length > 0 ? exact : inRange.filter((c) => c.presentationId === null);
+    matches.sort((a, b) => (a.validFrom < b.validFrom ? 1 : -1));
+    const cadence = matches[0];
+    const validatedCadence = cadence
+      ? parseFloat(cadence.validatedCadence as unknown as string)
+      : 0;
+    const plannedMinutes = downtimeRows
+      .filter((d) => d.categoryIsPlanned)
+      .reduce((s, d) => s + d.durationMinutes, 0);
+    const unplannedMinutes = downtimeRows
+      .filter((d) => !d.categoryIsPlanned)
+      .reduce((s, d) => s + d.durationMinutes, 0);
     const shiftDuration = shiftDurationMinutes(entry.shiftStart, entry.shiftEnd);
 
     const trsMetrics = calculateTrs({
@@ -209,10 +243,11 @@ async function buildEntriesWithDetails(entryIds: string[]) {
       updatedAt: entry.updatedAt.toISOString(),
       equipmentName: entry.equipmentName ?? null,
       productName: entry.productName ?? null,
-      operatorName: entry.operatorFirstName && entry.operatorLastName
-        ? `${entry.operatorFirstName} ${entry.operatorLastName}`
-        : null,
-      downtimeEvents: downtimeRows.map(d => ({
+      operatorName:
+        entry.operatorFirstName && entry.operatorLastName
+          ? `${entry.operatorFirstName} ${entry.operatorLastName}`
+          : null,
+      downtimeEvents: downtimeRows.map((d) => ({
         id: d.id,
         entryId: d.entryId,
         categoryId: d.categoryId,
@@ -251,7 +286,10 @@ router.get("/production-entries", requireAuth, async (req, res): Promise<void> =
     if (dateFrom) filters.push(gte(productionEntriesTable.date, dateFrom));
     if (dateTo) filters.push(lte(productionEntriesTable.date, dateTo));
     if (status) {
-      const statusValues = status.split(",").map(s => s.trim()).filter(Boolean) as ("draft" | "submitted" | "validated" | "rejected")[];
+      const statusValues = status
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean) as ("draft" | "submitted" | "validated" | "rejected")[];
       if (statusValues.length === 1) {
         filters.push(eq(productionEntriesTable.status, statusValues[0]));
       } else if (statusValues.length > 1) {
@@ -271,7 +309,7 @@ router.get("/production-entries", requireAuth, async (req, res): Promise<void> =
       .orderBy(productionEntriesTable.date, productionEntriesTable.createdAt)
       .limit(500);
 
-    const ids = entries.map(e => e.id);
+    const ids = entries.map((e) => e.id);
     if (entries.length === 500) {
       res.set("X-Has-More", "true");
     }
@@ -290,15 +328,7 @@ router.post("/production-entries", requireAuth, async (req, res): Promise<void> 
       res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Données invalides" });
       return;
     }
-    const { date, equipmentId, productId, batchNumber, shift, shiftStart, shiftEnd,
-      quantityProduced, quantityConforming, quantityRejected } = parsed.data;
-
-    if (quantityConforming + quantityRejected > quantityProduced) {
-      res.status(400).json({ error: "Conformes + rejetées ne peut pas dépasser la quantité produite" });
-      return;
-    }
-
-    const [entry] = await db.insert(productionEntriesTable).values({
+    const {
       date,
       equipmentId,
       productId,
@@ -309,16 +339,46 @@ router.post("/production-entries", requireAuth, async (req, res): Promise<void> 
       quantityProduced,
       quantityConforming,
       quantityRejected,
-      operatorId: req.user!.id,
-      status: "draft",
-    }).returning();
+    } = parsed.data;
+
+    if (quantityConforming + quantityRejected > quantityProduced) {
+      res
+        .status(400)
+        .json({ error: "Conformes + rejetées ne peut pas dépasser la quantité produite" });
+      return;
+    }
+
+    const [entry] = await db
+      .insert(productionEntriesTable)
+      .values({
+        date,
+        equipmentId,
+        productId,
+        batchNumber,
+        shift,
+        shiftStart,
+        shiftEnd,
+        quantityProduced,
+        quantityConforming,
+        quantityRejected,
+        operatorId: req.user!.id,
+        status: "draft",
+      })
+      .returning();
     const full = await buildEntryWithDetails(entry.id);
-    writeAudit({ userId: req.user!.id, tableName: "production_entries", recordId: entry.id,
-      action: "create", newValues: { batchNumber, date, equipmentId, productId, shift } });
+    writeAudit({
+      userId: req.user!.id,
+      tableName: "production_entries",
+      recordId: entry.id,
+      action: "create",
+      newValues: { batchNumber, date, equipmentId, productId, shift },
+    });
     res.status(201).json(full);
   } catch (err) {
     if (isUniqueViolation(err)) {
-      res.status(409).json({ error: "Un lot avec ce numéro existe déjà pour cet équipement et cette date" });
+      res
+        .status(409)
+        .json({ error: "Un lot avec ce numéro existe déjà pour cet équipement et cette date" });
       return;
     }
     req.log.error({ err }, "Create production entry error");
@@ -348,7 +408,10 @@ router.get("/production-entries/:id", requireAuth, async (req, res): Promise<voi
 router.patch("/production-entries/:id", requireAuth, async (req, res): Promise<void> => {
   try {
     const entryId = req.params["id"] as string;
-    const [existing] = await db.select().from(productionEntriesTable).where(eq(productionEntriesTable.id, entryId));
+    const [existing] = await db
+      .select()
+      .from(productionEntriesTable)
+      .where(eq(productionEntriesTable.id, entryId));
     if (!existing) {
       res.status(404).json({ error: "Entry not found" });
       return;
@@ -363,8 +426,19 @@ router.patch("/production-entries/:id", requireAuth, async (req, res): Promise<v
         return;
       }
     }
-    const { date, equipmentId, productId, batchNumber, shift, shiftStart, shiftEnd,
-      quantityProduced, quantityConforming, quantityRejected, status } = req.body as Record<string, unknown>;
+    const {
+      date,
+      equipmentId,
+      productId,
+      batchNumber,
+      shift,
+      shiftStart,
+      shiftEnd,
+      quantityProduced,
+      quantityConforming,
+      quantityRejected,
+      status,
+    } = req.body as Record<string, unknown>;
     const updatePayload: Record<string, unknown> = {};
     if (date !== undefined) updatePayload.date = String(date);
     if (equipmentId !== undefined) updatePayload.equipmentId = String(equipmentId);
@@ -374,15 +448,22 @@ router.patch("/production-entries/:id", requireAuth, async (req, res): Promise<v
     if (shiftStart !== undefined) updatePayload.shiftStart = String(shiftStart);
     if (shiftEnd !== undefined) updatePayload.shiftEnd = String(shiftEnd);
     if (quantityProduced !== undefined) updatePayload.quantityProduced = Number(quantityProduced);
-    if (quantityConforming !== undefined) updatePayload.quantityConforming = Number(quantityConforming);
+    if (quantityConforming !== undefined)
+      updatePayload.quantityConforming = Number(quantityConforming);
     if (quantityRejected !== undefined) updatePayload.quantityRejected = Number(quantityRejected);
     if (status !== undefined && req.user!.role === "admin") {
-      const allowed = ["draft","submitted","validated","rejected"];
-      if (!allowed.includes(String(status))) { res.status(400).json({ error: "Statut invalide" }); return; }
+      const allowed = ["draft", "submitted", "validated", "rejected"];
+      if (!allowed.includes(String(status))) {
+        res.status(400).json({ error: "Statut invalide" });
+        return;
+      }
       updatePayload.status = String(status);
     }
 
-    await db.update(productionEntriesTable).set(updatePayload).where(eq(productionEntriesTable.id, entryId));
+    await db
+      .update(productionEntriesTable)
+      .set(updatePayload)
+      .where(eq(productionEntriesTable.id, entryId));
     const full = await buildEntryWithDetails(entryId);
     res.json(full);
   } catch (err) {
@@ -394,7 +475,10 @@ router.patch("/production-entries/:id", requireAuth, async (req, res): Promise<v
 router.post("/production-entries/:id/submit", requireAuth, async (req, res): Promise<void> => {
   try {
     const entryId = req.params["id"] as string;
-    const [existing] = await db.select().from(productionEntriesTable).where(eq(productionEntriesTable.id, entryId));
+    const [existing] = await db
+      .select()
+      .from(productionEntriesTable)
+      .where(eq(productionEntriesTable.id, entryId));
     if (!existing) {
       res.status(404).json({ error: "Entry not found" });
       return;
@@ -407,7 +491,8 @@ router.post("/production-entries/:id/submit", requireAuth, async (req, res): Pro
       res.status(400).json({ error: "Only draft entries can be submitted" });
       return;
     }
-    await db.update(productionEntriesTable)
+    await db
+      .update(productionEntriesTable)
       .set({ status: "submitted", submittedAt: new Date() })
       .where(eq(productionEntriesTable.id, entryId));
     const full = await buildEntryWithDetails(entryId);
@@ -418,61 +503,96 @@ router.post("/production-entries/:id/submit", requireAuth, async (req, res): Pro
   }
 });
 
-router.post("/production-entries/:id/validate", requireAuth, requireRole("supervisor", "admin"), async (req, res): Promise<void> => {
-  try {
-    const entryId = req.params["id"] as string;
-    const { action, comment } = req.body as { action: "validate" | "reject"; comment?: string };
-    if (!action || !["validate", "reject"].includes(action)) {
-      res.status(400).json({ error: "Action invalide" });
-      return;
+router.post(
+  "/production-entries/:id/validate",
+  requireAuth,
+  requireRole("supervisor", "admin"),
+  async (req, res): Promise<void> => {
+    try {
+      const entryId = req.params["id"] as string;
+      const { action, comment } = req.body as { action: "validate" | "reject"; comment?: string };
+      if (!action || !["validate", "reject"].includes(action)) {
+        res.status(400).json({ error: "Action invalide" });
+        return;
+      }
+      const [existing] = await db
+        .select()
+        .from(productionEntriesTable)
+        .where(eq(productionEntriesTable.id, entryId));
+      if (!existing) {
+        res.status(404).json({ error: "Entry not found" });
+        return;
+      }
+      if (existing.status !== "submitted") {
+        res.status(400).json({ error: "Only submitted entries can be validated or rejected" });
+        return;
+      }
+      const newStatus = action === "validate" ? "validated" : "rejected";
+      await db
+        .update(productionEntriesTable)
+        .set({
+          status: newStatus,
+          supervisorId: req.user!.id,
+          supervisorComment: comment ?? null,
+          validatedAt: new Date(),
+        })
+        .where(eq(productionEntriesTable.id, entryId));
+      writeAudit({
+        userId: req.user!.id,
+        tableName: "production_entries",
+        recordId: entryId,
+        action: action === "validate" ? "validate" : "reject",
+        oldValues: { status: existing.status },
+        newValues: { status: newStatus },
+        reason: comment ?? null,
+      });
+      const full = await buildEntryWithDetails(entryId);
+      res.json(full);
+    } catch (err) {
+      req.log.error({ err }, "Validate production entry error");
+      res.status(500).json({ error: "Internal server error" });
     }
-    const [existing] = await db.select().from(productionEntriesTable).where(eq(productionEntriesTable.id, entryId));
-    if (!existing) {
-      res.status(404).json({ error: "Entry not found" });
-      return;
-    }
-    if (existing.status !== "submitted") {
-      res.status(400).json({ error: "Only submitted entries can be validated or rejected" });
-      return;
-    }
-    const newStatus = action === "validate" ? "validated" : "rejected";
-    await db.update(productionEntriesTable).set({
-      status: newStatus,
-      supervisorId: req.user!.id,
-      supervisorComment: comment ?? null,
-      validatedAt: new Date(),
-    }).where(eq(productionEntriesTable.id, entryId));
-    writeAudit({ userId: req.user!.id, tableName: "production_entries", recordId: entryId,
-      action: action === "validate" ? "validate" : "reject",
-      oldValues: { status: existing.status },
-      newValues: { status: newStatus },
-      reason: comment ?? null });
-    const full = await buildEntryWithDetails(entryId);
-    res.json(full);
-  } catch (err) {
-    req.log.error({ err }, "Validate production entry error");
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
+  },
+);
 
 // ─── Admin: suppression définitive d'un lot ──────────────────────────────────
-router.delete("/production-entries/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
-  try {
-    const entryId = req.params["id"] as string;
-    const [existing] = await db.select().from(productionEntriesTable).where(eq(productionEntriesTable.id, entryId));
-    if (!existing) { res.status(404).json({ error: "Lot introuvable" }); return; }
-    // Supprimer les arrêts liés et le lot dans une transaction atomique
-    await db.transaction(async (tx) => {
-      await tx.delete(downtimeEventsTable).where(eq(downtimeEventsTable.entryId, entryId));
-      await tx.delete(productionEntriesTable).where(eq(productionEntriesTable.id, entryId));
-    });
-    writeAudit({ userId: req.user!.id, tableName: "production_entries", recordId: entryId,
-      action: "delete", oldValues: { batchNumber: existing.batchNumber, date: existing.date, status: existing.status } });
-    res.json({ success: true });
-  } catch (err) {
-    req.log.error({ err }, "Delete production entry error");
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
+router.delete(
+  "/production-entries/:id",
+  requireAuth,
+  requireRole("admin"),
+  async (req, res): Promise<void> => {
+    try {
+      const entryId = req.params["id"] as string;
+      const [existing] = await db
+        .select()
+        .from(productionEntriesTable)
+        .where(eq(productionEntriesTable.id, entryId));
+      if (!existing) {
+        res.status(404).json({ error: "Lot introuvable" });
+        return;
+      }
+      // Supprimer les arrêts liés et le lot dans une transaction atomique
+      await db.transaction(async (tx) => {
+        await tx.delete(downtimeEventsTable).where(eq(downtimeEventsTable.entryId, entryId));
+        await tx.delete(productionEntriesTable).where(eq(productionEntriesTable.id, entryId));
+      });
+      writeAudit({
+        userId: req.user!.id,
+        tableName: "production_entries",
+        recordId: entryId,
+        action: "delete",
+        oldValues: {
+          batchNumber: existing.batchNumber,
+          date: existing.date,
+          status: existing.status,
+        },
+      });
+      res.json({ success: true });
+    } catch (err) {
+      req.log.error({ err }, "Delete production entry error");
+      res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);
 
 export default router;

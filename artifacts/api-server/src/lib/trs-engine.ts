@@ -26,12 +26,12 @@
  */
 
 export interface TrsInputs {
-  shiftDurationMinutes: number;       // tO for this shift
-  plannedDowntimeMinutes: number;     // Σ planned stop durations
-  unplannedDowntimeMinutes: number;   // Σ unplanned stop durations
+  shiftDurationMinutes: number; // tO for this shift
+  plannedDowntimeMinutes: number; // Σ planned stop durations
+  unplannedDowntimeMinutes: number; // Σ unplanned stop durations
   quantityProduced: number;
   quantityConforming: number;
-  validatedCadence: number;           // units per hour
+  validatedCadence: number; // units per hour
 }
 
 export interface TrsMetrics {
@@ -50,6 +50,8 @@ export interface TrsMetrics {
   plannedDowntimeMinutes: number;
   unplannedDowntimeMinutes: number;
   cadenceGap: number;
+  /** True when no valid cadence was found for the entry — TRS/TP/TQ are 0 by default but must not be displayed as a real result. */
+  cadenceMissing: boolean;
 }
 
 function safeDivide(numerator: number, denominator: number): number {
@@ -103,6 +105,7 @@ export function calculateTrs(inputs: TrsInputs): TrsMetrics {
     plannedDowntimeMinutes,
     unplannedDowntimeMinutes,
     cadenceGap: Math.round(cadenceGap * 100) / 100,
+    cadenceMissing: validatedCadence <= 0,
   };
 }
 
@@ -118,7 +121,7 @@ export function shiftDurationMinutes(start: string, end: string): number {
   const startMin = timeToMinutes(start);
   const endMin = timeToMinutes(end);
   if (endMin >= startMin) return endMin - startMin;
-  return (1440 - startMin) + endMin; // overnight
+  return 1440 - startMin + endMin; // overnight
 }
 
 // ─── V1 Monthly consolidation (legacy — production entries only) ──────────────
@@ -132,6 +135,7 @@ export interface MonthlyTrsInputs {
     tO: number;
     plannedDowntimeMinutes: number;
     unplannedDowntimeMinutes: number;
+    cadenceMissing?: boolean;
   }>;
   trsObjective: number;
 }
@@ -141,11 +145,22 @@ export function calculateMonthlyTrs(inputs: MonthlyTrsInputs) {
 
   if (entries.length === 0) {
     return {
-      trs: null, DO: null, TP: null, TQ: null, TRG: null, TRE: null,
-      totalTR: 0, totalTU: 0, totalTF: 0, totalTN: 0, totalTO: 0,
-      totalDowntimePlanned: 0, totalDowntimeUnplanned: 0,
+      trs: null,
+      DO: null,
+      TP: null,
+      TQ: null,
+      TRG: null,
+      TRE: null,
+      totalTR: 0,
+      totalTU: 0,
+      totalTF: 0,
+      totalTN: 0,
+      totalTO: 0,
+      totalDowntimePlanned: 0,
+      totalDowntimeUnplanned: 0,
       trsObjective,
       source: "production" as const,
+      entriesWithMissingCadence: 0,
     };
   }
 
@@ -157,6 +172,7 @@ export function calculateMonthlyTrs(inputs: MonthlyTrsInputs) {
   const totalTT = entries.length * 1440;
   const totalDowntimePlanned = entries.reduce((s, e) => s + e.plannedDowntimeMinutes, 0);
   const totalDowntimeUnplanned = entries.reduce((s, e) => s + e.unplannedDowntimeMinutes, 0);
+  const entriesWithMissingCadence = entries.filter((e) => e.cadenceMissing).length;
 
   const TRS = safeDivide(totalTU, totalTR);
   const DO = safeDivide(totalTF, totalTR);
@@ -166,11 +182,22 @@ export function calculateMonthlyTrs(inputs: MonthlyTrsInputs) {
   const TRE = safeDivide(totalTU, totalTT);
 
   return {
-    trs: TRS, DO, TP, TQ, TRG, TRE,
-    totalTR, totalTU, totalTF, totalTN, totalTO,
-    totalDowntimePlanned, totalDowntimeUnplanned,
+    trs: TRS,
+    DO,
+    TP,
+    TQ,
+    TRG,
+    TRE,
+    totalTR,
+    totalTU,
+    totalTF,
+    totalTN,
+    totalTO,
+    totalDowntimePlanned,
+    totalDowntimeUnplanned,
     trsObjective,
     source: "production" as const,
+    entriesWithMissingCadence,
   };
 }
 
@@ -181,9 +208,9 @@ export function calculateMonthlyTrs(inputs: MonthlyTrsInputs) {
  * tR and tO come from the fiche journalière, not from individual shift times.
  */
 export interface DailyBaseRow {
-  tO: number;   // t_opening_min
-  tAP: number;  // pause + chsg + apr + mqch
-  tR: number;   // tO − tAP
+  tO: number; // t_opening_min
+  tAP: number; // pause + chsg + apr + mqch
+  tR: number; // tO − tAP
 }
 
 /**
@@ -196,6 +223,7 @@ export interface ProdMetricsRow {
   tN: number;
   plannedDowntimeMinutes: number;
   unplannedDowntimeMinutes: number;
+  cadenceMissing?: boolean;
 }
 
 /**
@@ -218,45 +246,70 @@ export interface ProdMetricsRow {
 export function calculateMonthlyTrsV2(
   dailyBase: DailyBaseRow[],
   prodMetrics: ProdMetricsRow[],
-  trsObjective: number
+  trsObjective: number,
 ) {
   if (dailyBase.length === 0) {
     return {
-      trs: null, DO: null, TP: null, TQ: null, TRG: null, TRE: null,
-      totalTR: 0, totalTU: 0, totalTF: 0, totalTN: 0, totalTO: 0,
-      totalTAP: 0, totalDowntimePlanned: 0, totalDowntimeUnplanned: 0,
+      trs: null,
+      DO: null,
+      TP: null,
+      TQ: null,
+      TRG: null,
+      TRE: null,
+      totalTR: 0,
+      totalTU: 0,
+      totalTF: 0,
+      totalTN: 0,
+      totalTO: 0,
+      totalTAP: 0,
+      totalDowntimePlanned: 0,
+      totalDowntimeUnplanned: 0,
       trsObjective,
       source: "daily" as const,
+      entriesWithMissingCadence: 0,
     };
   }
 
   // Denominator base from daily entries
-  const totalTR  = dailyBase.reduce((s, d) => s + d.tR, 0);
-  const totalTO  = dailyBase.reduce((s, d) => s + d.tO, 0);
+  const totalTR = dailyBase.reduce((s, d) => s + d.tR, 0);
+  const totalTO = dailyBase.reduce((s, d) => s + d.tO, 0);
   const totalTAP = dailyBase.reduce((s, d) => s + d.tAP, 0);
 
   // Numerator from production entries
-  const totalTU  = prodMetrics.reduce((s, p) => s + p.tU, 0);
-  const totalTF  = prodMetrics.reduce((s, p) => s + p.tF, 0);
-  const totalTN  = prodMetrics.reduce((s, p) => s + p.tN, 0);
-  const totalDowntimePlanned   = prodMetrics.reduce((s, p) => s + p.plannedDowntimeMinutes, 0);
+  const totalTU = prodMetrics.reduce((s, p) => s + p.tU, 0);
+  const totalTF = prodMetrics.reduce((s, p) => s + p.tF, 0);
+  const totalTN = prodMetrics.reduce((s, p) => s + p.tN, 0);
+  const totalDowntimePlanned = prodMetrics.reduce((s, p) => s + p.plannedDowntimeMinutes, 0);
   const totalDowntimeUnplanned = prodMetrics.reduce((s, p) => s + p.unplannedDowntimeMinutes, 0);
+  const entriesWithMissingCadence = prodMetrics.filter((p) => p.cadenceMissing).length;
 
   const daysInMonth = dailyBase.length;
   const totalTT = daysInMonth * 1440;
 
   const TRS = safeDivide(totalTU, totalTR);
-  const DO  = safeDivide(totalTF, totalTR);
-  const TP  = safeDivide(totalTN, totalTF);
-  const TQ  = safeDivide(totalTU, totalTN);
+  const DO = safeDivide(totalTF, totalTR);
+  const TP = safeDivide(totalTN, totalTF);
+  const TQ = safeDivide(totalTU, totalTN);
   const TRG = safeDivide(totalTU, totalTO);
   const TRE = safeDivide(totalTU, totalTT);
 
   return {
-    trs: TRS, DO, TP, TQ, TRG, TRE,
-    totalTR, totalTU, totalTF, totalTN, totalTO, totalTAP,
-    totalDowntimePlanned, totalDowntimeUnplanned,
+    trs: TRS,
+    DO,
+    TP,
+    TQ,
+    TRG,
+    TRE,
+    totalTR,
+    totalTU,
+    totalTF,
+    totalTN,
+    totalTO,
+    totalTAP,
+    totalDowntimePlanned,
+    totalDowntimeUnplanned,
     trsObjective,
     source: "daily" as const,
+    entriesWithMissingCadence,
   };
 }

@@ -38,8 +38,18 @@ function getMonthDateRange(month: number, year: number) {
 }
 
 // ─── Batch metadata fetch: 2 queries instead of 2N ───────────────────────────
-// Fetches all downtime events + all cadences for a given set of entries
-// in exactly 2 SQL queries total, regardless of how many entries there are.
+// Fetches all downtime events + all candidate cadences for a given set of
+// entries in exactly 2 SQL queries total, regardless of how many entries
+// there are. Cadence matching (by date + presentation) is done per-entry
+// in memory via lookupCadence().
+type CadenceCandidate = {
+  validatedCadence: number;
+  validFrom: string;
+  validTo: string | null;
+  presentationId: string | null;
+};
+type CadencesByPair = Map<string, CadenceCandidate[]>;
+
 async function batchFetchMetadata(
   entries: Array<{ id: string; equipmentId: string; productId: string }>,
 ) {
@@ -49,7 +59,7 @@ async function batchFetchMetadata(
         string,
         Array<{ durationMinutes: number; isPlanned: boolean | null }>
       >(),
-      cadencesByPair: new Map<string, number>(),
+      cadencesByPair: new Map() as CadencesByPair,
     };
   }
 
@@ -82,42 +92,94 @@ async function batchFetchMetadata(
     downtimesByEntry.set(dt.entryId, arr);
   }
 
-  // Query 2: all cadences for all equipments present in the entries
+  // Query 2: active cadences for equipments present in the entries.
+  // Per-entry date/presentation matching happens in lookupCadence() below.
   const allCadences = await db
     .select({
       equipmentId: cadencesTable.equipmentId,
       productId: cadencesTable.productId,
+      presentationId: cadencesTable.presentationId,
       validatedCadence: cadencesTable.validatedCadence,
+      validFrom: cadencesTable.validFrom,
+      validTo: cadencesTable.validTo,
     })
     .from(cadencesTable)
-    .where(inArray(cadencesTable.equipmentId, uniqueEquipmentIds));
-
-  const cadencesByPair = new Map<string, number>();
-  for (const c of allCadences) {
-    cadencesByPair.set(
-      `${c.equipmentId}:${c.productId}`,
-      parseFloat(c.validatedCadence as unknown as string),
+    .where(
+      and(eq(cadencesTable.isActive, true), inArray(cadencesTable.equipmentId, uniqueEquipmentIds)),
     );
+
+  const cadencesByPair: CadencesByPair = new Map();
+  for (const c of allCadences) {
+    const key = `${c.equipmentId}:${c.productId}`;
+    const arr = cadencesByPair.get(key) ?? [];
+    arr.push({
+      validatedCadence: parseFloat(c.validatedCadence as unknown as string),
+      validFrom: c.validFrom,
+      validTo: c.validTo,
+      presentationId: c.presentationId,
+    });
+    cadencesByPair.set(key, arr);
   }
 
   return { downtimesByEntry, cadencesByPair };
 }
 
+/**
+ * Pick the validated cadence for an entry given its date and (optional) presentation.
+ *
+ *   1. Filter candidates by validFrom <= entryDate AND (validTo IS NULL OR validTo >= entryDate)
+ *   2. Prefer exact presentation match; fall back to presentation_id IS NULL
+ *      (legacy rows where presentation was not specified)
+ *   3. If multiple candidates remain, take the most recent validFrom (latest version wins)
+ *
+ * Returns 0 if no cadence matches — caller should treat this as "missing".
+ */
+function lookupCadence(
+  cadencesByPair: CadencesByPair,
+  equipmentId: string,
+  productId: string,
+  entryDate: string,
+  presentationId: string | null,
+): number {
+  const candidates = cadencesByPair.get(`${equipmentId}:${productId}`);
+  if (!candidates || candidates.length === 0) return 0;
+
+  const inRange = candidates.filter(
+    (c) => c.validFrom <= entryDate && (c.validTo === null || c.validTo >= entryDate),
+  );
+  if (inRange.length === 0) return 0;
+
+  const exact = inRange.filter((c) => c.presentationId === presentationId);
+  const matches = exact.length > 0 ? exact : inRange.filter((c) => c.presentationId === null);
+  if (matches.length === 0) return 0;
+
+  matches.sort((a, b) => (a.validFrom < b.validFrom ? 1 : -1));
+  return matches[0].validatedCadence;
+}
+
 function computeEntryMetrics(
   entry: {
     id: string;
+    date: string;
     equipmentId: string;
     productId: string;
+    presentationId: string | null;
     shiftStart: string;
     shiftEnd: string;
     quantityProduced: number;
     quantityConforming: number;
   },
   downtimesByEntry: Map<string, Array<{ durationMinutes: number; isPlanned: boolean | null }>>,
-  cadencesByPair: Map<string, number>,
+  cadencesByPair: CadencesByPair,
 ) {
   const downtimes = downtimesByEntry.get(entry.id) ?? [];
-  const validatedCadence = cadencesByPair.get(`${entry.equipmentId}:${entry.productId}`) ?? 0;
+  const validatedCadence = lookupCadence(
+    cadencesByPair,
+    entry.equipmentId,
+    entry.productId,
+    entry.date,
+    entry.presentationId,
+  );
   const plannedMinutes = downtimes
     .filter((d) => d.isPlanned)
     .reduce((s, d) => s + d.durationMinutes, 0);
@@ -304,6 +366,7 @@ router.get(
       totalQuantityProduced,
       totalQuantityConforming,
       totalRejected,
+      entriesWithMissingCadence: monthlyData.entriesWithMissingCadence,
     });
   }),
 );
@@ -617,6 +680,7 @@ router.get(
         TRG: monthly.TRG !== null ? monthly.TRG * 100 : null,
         trsObjective: trsObj,
         productionDays,
+        entriesWithMissingCadence: monthly.entriesWithMissingCadence,
       };
     });
     res.json(result);
@@ -664,6 +728,7 @@ router.get(
       totalDowntimePlanned: monthly.totalDowntimePlanned,
       totalDowntimeUnplanned: monthly.totalDowntimeUnplanned,
       source: monthly.source,
+      entriesWithMissingCadence: monthly.entriesWithMissingCadence,
     });
   }),
 );
@@ -685,6 +750,7 @@ router.get(
         date: productionEntriesTable.date,
         equipmentId: productionEntriesTable.equipmentId,
         productId: productionEntriesTable.productId,
+        presentationId: productionEntriesTable.presentationId,
         batchNumber: productionEntriesTable.batchNumber,
         shift: productionEntriesTable.shift,
         shiftStart: productionEntriesTable.shiftStart,
@@ -749,10 +815,18 @@ router.get(
         .select({
           equipmentId: cadencesTable.equipmentId,
           productId: cadencesTable.productId,
+          presentationId: cadencesTable.presentationId,
           validatedCadence: cadencesTable.validatedCadence,
+          validFrom: cadencesTable.validFrom,
+          validTo: cadencesTable.validTo,
         })
         .from(cadencesTable)
-        .where(inArray(cadencesTable.equipmentId, uniqueEquipmentIds)),
+        .where(
+          and(
+            eq(cadencesTable.isActive, true),
+            inArray(cadencesTable.equipmentId, uniqueEquipmentIds),
+          ),
+        ),
     ]);
 
     // Build lookup maps (in memory)
@@ -763,18 +837,29 @@ router.get(
       downtimesByEntry.set(d.entryId, arr);
     }
 
-    const cadencesByPair = new Map<string, number>();
+    const cadencesByPair: CadencesByPair = new Map();
     for (const c of allCadences) {
-      cadencesByPair.set(
-        `${c.equipmentId}:${c.productId}`,
-        parseFloat(c.validatedCadence as unknown as string),
-      );
+      const key = `${c.equipmentId}:${c.productId}`;
+      const arr = cadencesByPair.get(key) ?? [];
+      arr.push({
+        validatedCadence: parseFloat(c.validatedCadence as unknown as string),
+        validFrom: c.validFrom,
+        validTo: c.validTo,
+        presentationId: c.presentationId,
+      });
+      cadencesByPair.set(key, arr);
     }
 
     // Assemble results in memory (0 additional queries)
     const results = entries.map((entry) => {
       const downtimes = downtimesByEntry.get(entry.id) ?? [];
-      const validatedCadence = cadencesByPair.get(`${entry.equipmentId}:${entry.productId}`) ?? 0;
+      const validatedCadence = lookupCadence(
+        cadencesByPair,
+        entry.equipmentId,
+        entry.productId,
+        entry.date,
+        entry.presentationId,
+      );
       const plannedMinutes = downtimes
         .filter((d) => d.categoryIsPlanned)
         .reduce((s, d) => s + d.durationMinutes, 0);
