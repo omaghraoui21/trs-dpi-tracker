@@ -12,6 +12,7 @@ import {
   useUpdateProduct,
   useListCadences,
   useUpsertCadence,
+  useDeactivateCadence,
   useListDowntimeCategories,
   useCreateDowntimeCategory,
   useUpdateDowntimeCategory,
@@ -812,20 +813,28 @@ function CadencesTab() {
   const { data: products } = useListProducts();
   const { data: equipments } = useListEquipments();
   const upsertCadence = useUpsertCadence();
+  const deactivateCadence = useDeactivateCadence();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     productId: "",
     equipmentId: "",
+    presentationId: "" as string,
     theoreticalCadence: "",
     validatedCadence: "",
     unit: "units/hour",
   });
+
+  const selectedProduct = (products ?? []).find((p) => p.id === form.productId);
+  const presentations =
+    (selectedProduct as { presentations?: Array<{ id: string; name: string }> } | undefined)
+      ?.presentations ?? [];
 
   const handleSave = async () => {
     await upsertCadence.mutateAsync({
       data: {
         productId: form.productId,
         equipmentId: form.equipmentId,
+        presentationId: form.presentationId || null,
         theoreticalCadence: Number(form.theoreticalCadence),
         validatedCadence: Number(form.validatedCadence),
         unit: form.unit,
@@ -833,6 +842,12 @@ function CadencesTab() {
     });
     qc.invalidateQueries({ queryKey: getListCadencesQueryKey({}) });
     setOpen(false);
+  };
+
+  const handleDeactivate = async (id: string, label: string) => {
+    if (!window.confirm(`Désactiver la cadence "${label}" ?`)) return;
+    await deactivateCadence.mutateAsync({ id });
+    qc.invalidateQueries({ queryKey: getListCadencesQueryKey({}) });
   };
 
   return (
@@ -844,6 +859,7 @@ function CadencesTab() {
           setForm({
             productId: "",
             equipmentId: "",
+            presentationId: "",
             theoreticalCadence: "",
             validatedCadence: "",
             unit: "units/hour",
@@ -853,8 +869,8 @@ function CadencesTab() {
         addLabel="Nouvelle cadence"
       />
       <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-2.5 text-xs text-amber-400">
-        ℹ️ La modification crée une nouvelle version horodatée — l'historique des cadences est
-        conservé (NF E 60-182)
+        ℹ️ Une cadence active par triplet équipement × produit × présentation. La désactivation
+        ferme la cadence (validTo = aujourd'hui) sans perdre l'historique.
       </div>
       <TableWrapper>
         <table className="w-full text-sm">
@@ -862,14 +878,16 @@ function CadencesTab() {
             <tr className="border-b border-border bg-muted/40">
               {[
                 "Produit",
+                "Présentation",
                 "Équipement",
                 "Cadence théorique",
                 "Cadence validée",
                 "Unité",
                 "Active",
-              ].map((h) => (
+                "",
+              ].map((h, i) => (
                 <th
-                  key={h}
+                  key={i}
                   className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase"
                 >
                   {h}
@@ -884,6 +902,9 @@ function CadencesTab() {
                 className="border-b border-border/50 hover:bg-muted/30 transition-colors"
               >
                 <td className="px-4 py-3 whitespace-nowrap">{c.productName}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-muted-foreground text-xs">
+                  {c.presentationName ?? "—"}
+                </td>
                 <td className="px-4 py-3 whitespace-nowrap">{c.equipmentName}</td>
                 <td className="px-4 py-3 tabular-nums">{c.theoreticalCadence.toLocaleString()}</td>
                 <td className="px-4 py-3 tabular-nums font-bold">
@@ -895,6 +916,21 @@ function CadencesTab() {
                     <CheckCircle className="h-4 w-4 text-green-500" />
                   ) : (
                     <XCircle className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {c.isActive !== false && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        handleDeactivate(c.id, `${c.productName} / ${c.equipmentName}`)
+                      }
+                      className="text-muted-foreground hover:text-destructive"
+                      title="Désactiver cette cadence"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   )}
                 </td>
               </tr>
@@ -912,7 +948,7 @@ function CadencesTab() {
               <Label>Produit</Label>
               <Select
                 value={form.productId}
-                onValueChange={(v) => setForm((f) => ({ ...f, productId: v }))}
+                onValueChange={(v) => setForm((f) => ({ ...f, productId: v, presentationId: "" }))}
               >
                 <SelectTrigger className="h-11">
                   <SelectValue placeholder="Sélectionner..." />
@@ -926,6 +962,34 @@ function CadencesTab() {
                 </SelectContent>
               </Select>
             </div>
+            {presentations.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>Présentation</Label>
+                <Select
+                  value={form.presentationId || "__none__"}
+                  onValueChange={(v) =>
+                    setForm((f) => ({ ...f, presentationId: v === "__none__" ? "" : v }))
+                  }
+                >
+                  <SelectTrigger className="h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__" className="py-3 text-muted-foreground">
+                      Toutes les présentations
+                    </SelectItem>
+                    {presentations.map((p) => (
+                      <SelectItem key={p.id} value={p.id} className="py-3">
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Laissez vide pour une cadence générique applicable à toutes les présentations.
+                </p>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>Équipement</Label>
               <Select

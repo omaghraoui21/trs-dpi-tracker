@@ -1013,8 +1013,8 @@ export default function SupervisorPage() {
               </div>
               <div className="text-amber-200/80 text-xs mt-0.5">
                 Les TRS, TP et TQ de ces saisies sont à 0 par défaut faute de cadence — ils minorent
-                le TRS consolidé. Configurez la cadence (équipement × produit) dans Paramétrage pour
-                corriger.
+                le TRS consolidé. Configurez la cadence (équipement × produit × présentation) dans
+                Paramétrage pour corriger.
               </div>
             </div>
           </div>
