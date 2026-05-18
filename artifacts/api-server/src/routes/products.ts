@@ -3,6 +3,7 @@ import { db, productsTable, cadencesTable, equipmentsTable } from "@workspace/db
 import { eq, and } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
 import { isUniqueViolation } from "../lib/db-errors";
+import { writeAudit } from "../lib/audit";
 import {
   CreateProductBody,
   UpdateProductBody,
@@ -24,8 +25,12 @@ function formatProduct(p: typeof productsTable.$inferSelect) {
   };
 }
 
-router.get("/products", requireAuth, async (_req, res): Promise<void> => {
-  const rows = await db.select().from(productsTable).orderBy(productsTable.name);
+router.get("/products", requireAuth, async (req, res): Promise<void> => {
+  const includeInactive = req.query["includeInactive"] === "true";
+  const query = db.select().from(productsTable).$dynamic();
+  const rows = includeInactive
+    ? await query.orderBy(productsTable.name)
+    : await query.where(eq(productsTable.isActive, true)).orderBy(productsTable.name);
   res.json(rows.map(formatProduct));
 });
 
@@ -37,6 +42,13 @@ router.post("/products", requireAuth, requireRole("admin"), async (req, res): Pr
   }
   try {
     const [row] = await db.insert(productsTable).values(parsed.data).returning();
+    writeAudit({
+      userId: req.user?.id,
+      tableName: "products",
+      recordId: row.id,
+      action: "create",
+      newValues: row as unknown as Record<string, unknown>,
+    });
     res.status(201).json(formatProduct(row));
   } catch (err) {
     if (isUniqueViolation(err)) {
@@ -62,16 +74,36 @@ router.patch(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
-    const [row] = await db
-      .update(productsTable)
-      .set(parsed.data)
-      .where(eq(productsTable.id, params.data.id))
-      .returning();
-    if (!row) {
+    const [before] = await db
+      .select()
+      .from(productsTable)
+      .where(eq(productsTable.id, params.data.id));
+    if (!before) {
       res.status(404).json({ error: "Product not found" });
       return;
     }
-    res.json(formatProduct(row));
+    try {
+      const [row] = await db
+        .update(productsTable)
+        .set(parsed.data)
+        .where(eq(productsTable.id, params.data.id))
+        .returning();
+      writeAudit({
+        userId: req.user?.id,
+        tableName: "products",
+        recordId: row.id,
+        action: "update",
+        oldValues: before as unknown as Record<string, unknown>,
+        newValues: row as unknown as Record<string, unknown>,
+      });
+      res.json(formatProduct(row));
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        res.status(409).json({ error: "Un produit avec ce code existe déjà" });
+        return;
+      }
+      throw err;
+    }
   },
 );
 
@@ -85,15 +117,24 @@ router.delete(
       res.status(400).json({ error: "ID requis" });
       return;
     }
+    const [before] = await db.select().from(productsTable).where(eq(productsTable.id, id));
+    if (!before) {
+      res.status(404).json({ error: "Product not found" });
+      return;
+    }
     const [row] = await db
       .update(productsTable)
       .set({ isActive: false })
       .where(eq(productsTable.id, id))
       .returning();
-    if (!row) {
-      res.status(404).json({ error: "Product not found" });
-      return;
-    }
+    writeAudit({
+      userId: req.user?.id,
+      tableName: "products",
+      recordId: row.id,
+      action: "delete",
+      oldValues: before as unknown as Record<string, unknown>,
+      reason: "soft-delete via DELETE /products/:id",
+    });
     res.sendStatus(204);
   },
 );
