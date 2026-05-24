@@ -22,6 +22,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { KpiLabel } from "@/components/KpiLabel";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
@@ -282,7 +283,7 @@ function EquipmentCard({
           </div>
           {trs != null && (
             <div className="text-xs flex items-center justify-between">
-              <span className="text-muted-foreground">TRS</span>
+              <KpiLabel kpi="TRS" className="text-muted-foreground" showIcon={false} />
               <span className={cn("font-bold", trsColor(trs))}>{fmt(trs)}</span>
             </div>
           )}
@@ -569,7 +570,9 @@ export default function ProductionPage() {
         <div className="bg-card border border-border rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2 text-muted-foreground">
             <TrendingUp className="h-4 w-4" />
-            <span className="text-xs uppercase tracking-wide">TRS consolidé</span>
+            <span className="text-xs uppercase tracking-wide flex items-center gap-1">
+              <KpiLabel kpi="TRS" showIcon={false} /> consolidé
+            </span>
           </div>
           <div className={cn("text-2xl font-bold", trsColor(avgTrs))}>
             {avgTrs != null ? fmt(avgTrs) : "—"}
