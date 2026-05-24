@@ -314,7 +314,13 @@ function ArrêtModal({
 }: {
   open: boolean;
   mode: "live" | number | null;
-  categories: { id: string; code: string; label: string; isPlanned: boolean }[];
+  categories: {
+    id: string;
+    code: string;
+    label: string;
+    isPlanned: boolean;
+    famille: string | null;
+  }[];
   onClose: () => void;
   onConfirmLive: (categoryId: string) => Promise<void>;
   onConfirmMicro: (
@@ -327,11 +333,42 @@ function ArrêtModal({
   const [selectedCat, setSelectedCat] = useState("");
   const [comment, setComment] = useState("");
   const [saving, setSaving] = useState(false);
+  const [expandedFamille, setExpandedFamille] = useState<string | null>(null);
+
+  const FAMILLE_ORDER = [
+    "Panne équipement",
+    "Attente matière/article",
+    "Réglage/changement",
+    "Contrôle qualité",
+    "Nettoyage",
+    "Autre",
+  ];
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, typeof categories>();
+    for (const c of categories) {
+      const key = c.famille ?? "Autre";
+      const arr = map.get(key) ?? [];
+      arr.push(c);
+      map.set(key, arr);
+    }
+    const sorted: { famille: string; items: typeof categories }[] = [];
+    for (const f of FAMILLE_ORDER) {
+      const items = map.get(f);
+      if (items) sorted.push({ famille: f, items });
+      map.delete(f);
+    }
+    for (const [famille, items] of map) {
+      sorted.push({ famille, items });
+    }
+    return sorted;
+  }, [categories]);
 
   useEffect(() => {
     if (open) {
       setSelectedCat("");
       setComment("");
+      setExpandedFamille(null);
     }
   }, [open]);
 
@@ -363,31 +400,53 @@ function ArrêtModal({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2">
-          <div className="grid grid-cols-1 gap-1.5 max-h-56 overflow-y-auto">
-            {categories.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => setSelectedCat(c.id)}
-                className={cn(
-                  "text-left px-3 py-2.5 rounded-lg border text-sm transition-colors",
-                  selectedCat === c.id
-                    ? c.isPlanned
-                      ? "border-blue-500 bg-blue-500/10 text-blue-300"
-                      : "border-red-500 bg-red-500/10 text-red-300"
-                    : "border-border bg-card text-muted-foreground hover:border-border/80",
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <span
+          <div className="max-h-64 overflow-y-auto space-y-1">
+            {grouped.map(({ famille, items }) => (
+              <div key={famille}>
+                <button
+                  onClick={() => setExpandedFamille((prev) => (prev === famille ? null : famille))}
+                  className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/40 flex items-center justify-between"
+                >
+                  <span>
+                    {famille} ({items.length})
+                  </span>
+                  <ChevronDown
                     className={cn(
-                      "w-2 h-2 rounded-full shrink-0",
-                      c.isPlanned ? "bg-blue-400" : "bg-red-400",
+                      "h-3.5 w-3.5 transition-transform",
+                      expandedFamille === famille && "rotate-180",
                     )}
                   />
-                  <span className="font-medium">[{c.code}]</span>
-                  <span className="truncate">{c.label}</span>
-                </div>
-              </button>
+                </button>
+                {expandedFamille === famille && (
+                  <div className="grid grid-cols-1 gap-1 pl-1 pb-1">
+                    {items.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => setSelectedCat(c.id)}
+                        className={cn(
+                          "text-left px-3 py-2 rounded-lg border text-sm transition-colors",
+                          selectedCat === c.id
+                            ? c.isPlanned
+                              ? "border-blue-500 bg-blue-500/10 text-blue-300"
+                              : "border-red-500 bg-red-500/10 text-red-300"
+                            : "border-border bg-card text-muted-foreground hover:border-border/80",
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={cn(
+                              "w-2 h-2 rounded-full shrink-0",
+                              c.isPlanned ? "bg-blue-400" : "bg-red-400",
+                            )}
+                          />
+                          <span className="font-medium">[{c.code}]</span>
+                          <span className="truncate">{c.label}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
           {typeof mode === "number" && (
@@ -873,6 +932,7 @@ function LotActiveTracker({
         code: c.code,
         label: c.label,
         isPlanned: c.isPlanned,
+        famille: (c as unknown as { famille?: string | null }).famille ?? null,
         isQuickShortcut: (c as unknown as { isQuickShortcut?: boolean }).isQuickShortcut ?? false,
         shortcutEquipments:
           (c as unknown as { shortcutEquipments?: string | null }).shortcutEquipments ?? null,
