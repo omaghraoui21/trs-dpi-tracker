@@ -12,13 +12,13 @@ export function SimplePhasePanel({
   phase,
   onDone,
   onSkip,
-  _onNext,
+  onNext,
   hasNext,
 }: {
   phase: Phase;
   onDone: (durationMin: number, comment: string) => void;
   onSkip: () => void;
-  _onNext: () => void;
+  onNext: () => void;
   hasNext: boolean;
 }) {
   const def = getPhase(phase);

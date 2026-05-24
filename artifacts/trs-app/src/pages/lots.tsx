@@ -7,5 +7,10 @@ import { LotListView } from "@/components/lots/LotListView";
 // the sidebar without entering the session orchestrator.
 export default function LotsPage() {
   const [, navigate] = useLocation();
-  return <LotListView onNew={() => navigate("/entry")} onResume={() => navigate("/entry")} />;
+  return (
+    <LotListView
+      onNew={() => navigate("/entry")}
+      onResume={(id) => navigate(`/entry?resume=${encodeURIComponent(id)}`)}
+    />
+  );
 }

@@ -9,14 +9,19 @@ import { SessionView } from "./SessionView";
 type EntryView = "list" | "local" | "machine" | "session" | "active-lot";
 
 export default function EntryPage() {
-  const [view, setView] = useState<EntryView>("list");
+  // Read ?resume=<lotId> from URL — set when navigating from /lots
+  const initialResumeId =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("resume")
+      : null;
+  const [view, setView] = useState<EntryView>(initialResumeId ? "active-lot" : "list");
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [selectedEquipment, setSelectedEquipment] = useState<{
     id: string;
     code: string;
     name: string;
   } | null>(null);
-  const [resumeLotId, setResumeLotId] = useState<string | null>(null);
+  const [resumeLotId, setResumeLotId] = useState<string | null>(initialResumeId);
 
   if (view === "active-lot" && resumeLotId) {
     return (

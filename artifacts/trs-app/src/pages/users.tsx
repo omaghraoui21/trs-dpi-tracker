@@ -165,8 +165,8 @@ export default function UsersPage() {
                         <button
                           title="Désactiver"
                           className="h-9 w-9 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-500/10"
-                          onClick={() => {
-                            deleteUser.mutate({ id: u.id });
+                          onClick={async () => {
+                            await deleteUser.mutateAsync({ id: u.id });
                             qc.invalidateQueries({ queryKey: getListUsersQueryKey() });
                           }}
                         >

@@ -12,6 +12,7 @@ import {
 import type { ProductionEntryWithDetails } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { timeToMin } from "./utils";
 import {
   Play,
   StopCircle,
