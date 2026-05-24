@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "./custom-fetch";
 
 export interface RoomEquipment {
@@ -65,6 +65,44 @@ export function useListRooms() {
       }
 
       return Array.from(roomMap.values()).sort((a, b) => a.code.localeCompare(b.code));
+    },
+  });
+}
+
+// ─── Operator cycle phase order ──────────────────────────────────────────────
+
+export type CyclePhase = "VIDE_LIGNE" | "REMPLISSAGE" | "LOT" | "NETTOYAGE" | "DESINFECTION";
+
+export const DEFAULT_CYCLE_ORDER: CyclePhase[] = [
+  "VIDE_LIGNE",
+  "REMPLISSAGE",
+  "LOT",
+  "NETTOYAGE",
+  "DESINFECTION",
+];
+
+export const getCycleOrderQueryKey = () => ["/api/admin/cycle-order"] as const;
+
+export function useCycleOrder() {
+  return useQuery({
+    queryKey: getCycleOrderQueryKey(),
+    queryFn: ({ signal }) =>
+      customFetch<{ order: CyclePhase[] }>("/api/admin/cycle-order", { signal }),
+    staleTime: 60_000,
+  });
+}
+
+export function useUpdateCycleOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (order: CyclePhase[]) =>
+      customFetch<{ order: CyclePhase[] }>("/api/admin/cycle-order", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: getCycleOrderQueryKey() });
     },
   });
 }

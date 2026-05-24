@@ -12,12 +12,62 @@ import {
   kpiTargetsTable,
   standardTimesTable,
   productPresentationsTable,
+  appSettingsTable,
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { z } from "zod/v4";
 import { requireAuth, requireRole } from "../middlewares/auth";
 import { seedDpiConfig } from "../scripts/seed_dpi";
 
 const router = Router();
+
+const PHASE_VALUES = ["VIDE_LIGNE", "REMPLISSAGE", "LOT", "NETTOYAGE", "DESINFECTION"] as const;
+type CyclePhase = (typeof PHASE_VALUES)[number];
+const CYCLE_ORDER_KEY = "operator_cycle_default_order";
+const DEFAULT_CYCLE_ORDER: CyclePhase[] = [...PHASE_VALUES];
+
+const cycleOrderSchema = z.object({
+  order: z
+    .array(z.enum(PHASE_VALUES))
+    .length(5)
+    .refine((a) => new Set(a).size === 5, { message: "phases must be unique" }),
+});
+
+// GET /admin/cycle-order — readable by any authenticated user (operators need it)
+router.get("/cycle-order", requireAuth, async (_req, res) => {
+  try {
+    const rows = await db
+      .select()
+      .from(appSettingsTable)
+      .where(eq(appSettingsTable.key, CYCLE_ORDER_KEY));
+    const stored = rows[0]?.value as { order?: CyclePhase[] } | undefined;
+    const order = stored?.order && stored.order.length === 5 ? stored.order : DEFAULT_CYCLE_ORDER;
+    res.json({ order });
+  } catch (err) {
+    res.status(500).json({ error: "Impossible de récupérer l'ordre du cycle" });
+  }
+});
+
+// PUT /admin/cycle-order — admin only
+router.put("/cycle-order", requireAuth, requireRole("admin"), async (req, res) => {
+  const parsed = cycleOrderSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Ordre invalide", details: parsed.error.issues });
+    return;
+  }
+  try {
+    await db
+      .insert(appSettingsTable)
+      .values({ key: CYCLE_ORDER_KEY, value: { order: parsed.data.order } })
+      .onConflictDoUpdate({
+        target: appSettingsTable.key,
+        set: { value: { order: parsed.data.order } },
+      });
+    res.json({ order: parsed.data.order });
+  } catch (err) {
+    res.status(500).json({ error: "Impossible de sauvegarder l'ordre du cycle" });
+  }
+});
 
 // POST /admin/load-dpi-config — charge la configuration DPI TERIAK EF (idempotent)
 router.post("/load-dpi-config", requireAuth, requireRole("admin"), async (req, res) => {
@@ -39,24 +89,32 @@ router.post("/load-dpi-config", requireAuth, requireRole("admin"), async (req, r
 router.get("/config-status", requireAuth, requireRole("admin"), async (req, res) => {
   try {
     // Standards de temps à confirmer
-    const pendingStdTimes = await db.select().from(standardTimesTable)
+    const pendingStdTimes = await db
+      .select()
+      .from(standardTimesTable)
       .where(eq(standardTimesTable.needsConfirmation, true));
 
     // Présentations à confirmer
-    const pendingPresentations = await db.select().from(productPresentationsTable)
+    const pendingPresentations = await db
+      .select()
+      .from(productPresentationsTable)
       .where(eq(productPresentationsTable.needsConfirmation, true));
 
     // KPI targets sans valeur d'équipement
-    const kpiTargets = await db.select().from(kpiTargetsTable)
+    const kpiTargets = await db
+      .select()
+      .from(kpiTargetsTable)
       .where(eq(kpiTargetsTable.isActive, true));
 
     // Cadences
     const cadences = await db.select().from(cadencesTable);
-    const equipments = await db.select().from(equipmentsTable)
+    const equipments = await db
+      .select()
+      .from(equipmentsTable)
       .where(eq(equipmentsTable.isActive, true));
 
     const equipmentsWithoutCadence = equipments.filter(
-      eq => !cadences.some(c => c.equipmentId === eq.id)
+      (eq) => !cadences.some((c) => c.equipmentId === eq.id),
     );
 
     const checks = [
@@ -65,21 +123,21 @@ router.get("/config-status", requireAuth, requireRole("admin"), async (req, res)
         label: "Standards de temps",
         status: pendingStdTimes.length > 0 ? "provisional" : "confirmed",
         count: pendingStdTimes.length,
-        items: pendingStdTimes.map(s => s.comment ?? s.activityType),
+        items: pendingStdTimes.map((s) => s.comment ?? s.activityType),
       },
       {
         key: "presentations",
         label: "Conversions présentations produits",
         status: pendingPresentations.length > 0 ? "provisional" : "confirmed",
         count: pendingPresentations.length,
-        items: pendingPresentations.map(p => p.presentationName),
+        items: pendingPresentations.map((p) => p.presentationName),
       },
       {
         key: "cadences",
         label: "Cadences équipements",
         status: equipmentsWithoutCadence.length > 0 ? "provisional" : "confirmed",
         count: equipmentsWithoutCadence.length,
-        items: equipmentsWithoutCadence.map(e => `${e.name} — cadence à saisir`),
+        items: equipmentsWithoutCadence.map((e) => `${e.name} — cadence à saisir`),
       },
       {
         key: "kpi_targets",
@@ -90,7 +148,7 @@ router.get("/config-status", requireAuth, requireRole("admin"), async (req, res)
       },
     ];
 
-    const pendingCount = checks.filter(c => c.status === "provisional").length;
+    const pendingCount = checks.filter((c) => c.status === "provisional").length;
 
     res.json({
       ready: pendingCount === 0,

@@ -24,6 +24,10 @@ import {
   getListCadencesQueryKey,
   getListDowntimeCategoriesQueryKey,
   getListMonthlyClosuresQueryKey,
+  useCycleOrder,
+  useUpdateCycleOrder,
+  DEFAULT_CYCLE_ORDER,
+  type CyclePhase,
 } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -58,6 +62,11 @@ import {
   Filter,
   SquareCheck,
   Square,
+  ArrowUpDown,
+  ChevronUp,
+  ChevronDown,
+  RotateCcw,
+  Save,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -3802,6 +3811,138 @@ function CleanupTab() {
   );
 }
 
+// ─── Cycle opérateur — ordre des phases par défaut ─────────────────────────
+const CYCLE_PHASE_META: Record<CyclePhase, { label: string; description: string }> = {
+  VIDE_LIGNE: { label: "Vide ligne", description: "Vérification de l'absence de produit résiduel" },
+  REMPLISSAGE: { label: "Remplissage", description: "Approvisionnement de la machine" },
+  LOT: { label: "Lot — production", description: "Production du lot avec saisie des arrêts" },
+  NETTOYAGE: { label: "Nettoyage", description: "Nettoyage de l'équipement" },
+  DESINFECTION: { label: "Désinfection", description: "Désinfection finale" },
+};
+
+function arraysEqual<T>(a: T[], b: T[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+function CycleOrderTab() {
+  const { data, isLoading } = useCycleOrder();
+  const updateMut = useUpdateCycleOrder();
+  const [draft, setDraft] = useState<CyclePhase[]>(DEFAULT_CYCLE_ORDER);
+  const [initialized, setInitialized] = useState(false);
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+
+  if (data && !initialized) {
+    setDraft(data.order);
+    setInitialized(true);
+  }
+
+  const serverOrder = data?.order ?? DEFAULT_CYCLE_ORDER;
+  const dirty = !arraysEqual(draft, serverOrder);
+
+  const move = (idx: number, dir: -1 | 1) => {
+    const next = [...draft];
+    const target = idx + dir;
+    if (target < 0 || target >= next.length) return;
+    [next[idx], next[target]] = [next[target], next[idx]];
+    setDraft(next);
+    setSavedMsg(null);
+  };
+
+  const reset = () => {
+    setDraft([...DEFAULT_CYCLE_ORDER]);
+    setSavedMsg(null);
+  };
+
+  const save = () => {
+    updateMut.mutate(draft, {
+      onSuccess: () => setSavedMsg("Ordre enregistré."),
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-semibold flex items-center gap-2">
+          <ArrowUpDown className="h-5 w-5 text-sky-500" />
+          Cycle opérateur — ordre par défaut
+        </h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Ordre des 5 phases proposé par défaut à l'opérateur sur la page « Lot en cours ».
+          L'opérateur peut le modifier ponctuellement pour une session.
+        </p>
+      </div>
+
+      {isLoading && <div className="text-sm text-muted-foreground">Chargement…</div>}
+
+      <div className="space-y-2">
+        {draft.map((phase, idx) => {
+          const meta = CYCLE_PHASE_META[phase];
+          return (
+            <div key={phase} className="flex items-center gap-3 rounded-lg border bg-card p-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 font-semibold text-sm">
+                {idx + 1}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium">{meta.label}</div>
+                <div className="text-xs text-muted-foreground truncate">{meta.description}</div>
+              </div>
+              <div className="flex gap-1">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => move(idx, -1)}
+                  disabled={idx === 0}
+                  aria-label="Monter"
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => move(idx, 1)}
+                  disabled={idx === draft.length - 1}
+                  aria-label="Descendre"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 pt-2">
+        <Button onClick={save} disabled={!dirty || updateMut.isPending} className="gap-2">
+          <Save className="h-4 w-4" />
+          {updateMut.isPending ? "Enregistrement…" : "Enregistrer"}
+        </Button>
+        <Button
+          variant="outline"
+          onClick={reset}
+          disabled={arraysEqual(draft, DEFAULT_CYCLE_ORDER) || updateMut.isPending}
+          className="gap-2"
+        >
+          <RotateCcw className="h-4 w-4" />
+          Réinitialiser par défaut
+        </Button>
+        {savedMsg && (
+          <span className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+            <CheckCircle className="h-4 w-4" />
+            {savedMsg}
+          </span>
+        )}
+        {updateMut.isError && (
+          <span className="text-sm text-red-600 dark:text-red-400">Échec de la sauvegarde.</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Admin Page — Sidebar layout ─────────────────────
 const TABS = [
   { id: "dpi-config", label: "Config DPI EF", icon: Download, group: "Configuration" },
@@ -3809,6 +3950,7 @@ const TABS = [
   { id: "kpi-targets", label: "Objectifs KPI", icon: Target, group: "Paramétrage" },
   { id: "notif-rules", label: "Règles Alertes", icon: Bell, group: "Paramétrage" },
   { id: "plan-mappings", label: "Mappings Planning", icon: GitBranch, group: "Paramétrage" },
+  { id: "cycle-order", label: "Cycle opérateur", icon: ArrowUpDown, group: "Paramétrage" },
   { id: "lots", label: "Lots de production", icon: FileText, group: "Exploitation" },
   { id: "cleanup", label: "Nettoyage", icon: Eraser, group: "Exploitation" },
   { id: "users", label: "Utilisateurs", icon: Users, group: "Référentiels" },
@@ -3880,6 +4022,7 @@ export default function AdminPage() {
           {activeTab === "kpi-targets" && <KpiTargetsTab />}
           {activeTab === "notif-rules" && <NotificationRulesTab />}
           {activeTab === "plan-mappings" && <PlanningMappingsTab />}
+          {activeTab === "cycle-order" && <CycleOrderTab />}
           {activeTab === "lots" && <LotsTab />}
           {activeTab === "cleanup" && <CleanupTab />}
           {activeTab === "users" && <UsersTab />}

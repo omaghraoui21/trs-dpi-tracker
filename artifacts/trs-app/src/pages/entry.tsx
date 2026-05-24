@@ -11,6 +11,7 @@ import {
   getListProductionEntriesQueryKey,
   customFetch,
   useListRooms,
+  useCycleOrder,
 } from "@workspace/api-client-react";
 import type { ProductionEntryWithDetails, Room } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -38,6 +39,8 @@ import {
   SkipForward,
   Building2,
   Cpu,
+  ArrowUpDown,
+  ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -406,6 +409,99 @@ function ArrêtModal({
   );
 }
 
+// ─── Phase Reorder Dialog ─────────────────────────────────────────────────────
+function PhaseReorderDialog({
+  open,
+  onOpenChange,
+  order,
+  onApply,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  order: Phase[];
+  onApply: (newOrder: Phase[]) => void;
+}) {
+  const [draft, setDraft] = useState<Phase[]>(order);
+
+  useEffect(() => {
+    if (open) setDraft(order);
+  }, [open, order]);
+
+  const move = (idx: number, dir: -1 | 1) => {
+    const next = [...draft];
+    const target = idx + dir;
+    if (target < 0 || target >= next.length) return;
+    [next[idx], next[target]] = [next[target], next[idx]];
+    setDraft(next);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ArrowUpDown className="h-5 w-5 text-sky-500" />
+            Réorganiser le cycle
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Modifie l'ordre des phases pour cette session uniquement. L'ordre par défaut (admin) ne
+          sera pas modifié.
+        </p>
+        <div className="space-y-2 my-2">
+          {draft.map((phaseId, idx) => {
+            const def = getPhase(phaseId);
+            return (
+              <div
+                key={phaseId}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg border p-2.5",
+                  def.bg,
+                  def.borderActive,
+                )}
+              >
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-background/60 font-semibold text-xs">
+                  {idx + 1}
+                </div>
+                <span className={cn("shrink-0", def.color)}>{def.icon}</span>
+                <span className="flex-1 text-sm font-medium truncate">{def.label}</span>
+                <div className="flex gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => move(idx, -1)}
+                    disabled={idx === 0}
+                    aria-label="Monter"
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => move(idx, 1)}
+                    disabled={idx === draft.length - 1}
+                    aria-label="Descendre"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Annuler
+          </Button>
+          <Button onClick={() => onApply(draft)}>Appliquer</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Phase Rail (sticky header) ────────────────────────────────────────────────
 function PhaseRail({
   room,
@@ -414,6 +510,7 @@ function PhaseRail({
   phaseStatuses,
   activePhase,
   onPhaseClick,
+  onReorder,
   elapsed,
 }: {
   room: Room;
@@ -422,6 +519,7 @@ function PhaseRail({
   phaseStatuses: Record<Phase, PhaseStatus>;
   activePhase: Phase;
   onPhaseClick: (p: Phase) => void;
+  onReorder: () => void;
   elapsed: number;
 }) {
   return (
@@ -434,9 +532,19 @@ function PhaseRail({
         </span>
         <Cpu className="h-4 w-4 text-muted-foreground shrink-0 ml-1" />
         <span className="text-sm text-muted-foreground truncate">{equipment.name}</span>
-        <div className="ml-auto flex items-center gap-1.5 shrink-0 text-muted-foreground text-xs">
-          <Clock className="h-3.5 w-3.5" />
-          <span className="tabular-nums font-mono">{fmtSeconds(elapsed)}</span>
+        <div className="ml-auto flex items-center gap-2 shrink-0">
+          <button
+            onClick={onReorder}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border border-border/60 rounded-md px-2 py-1 hover:bg-muted/40 transition"
+            aria-label="Réorganiser les phases"
+          >
+            <ArrowUpDown className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Réorganiser</span>
+          </button>
+          <div className="flex items-center gap-1.5 text-muted-foreground text-xs">
+            <Clock className="h-3.5 w-3.5" />
+            <span className="tabular-nums font-mono">{fmtSeconds(elapsed)}</span>
+          </div>
         </div>
       </div>
 
@@ -527,9 +635,7 @@ function SimplePhasePanel({
   return (
     <div className="p-4 md:p-6 max-w-lg mx-auto space-y-5">
       {/* Phase header */}
-      <div
-        className={cn("rounded-2xl border p-5 space-y-2 text-center", def.bg, def.borderActive)}
-      >
+      <div className={cn("rounded-2xl border p-5 space-y-2 text-center", def.bg, def.borderActive)}>
         <div className={cn("flex justify-center", def.color)}>{def.icon}</div>
         <h2 className="text-xl font-bold">{def.label}</h2>
         <p className="text-sm text-muted-foreground">{def.description}</p>
@@ -539,9 +645,7 @@ function SimplePhasePanel({
         <>
           {/* Timer */}
           <div className="bg-card border border-border rounded-2xl p-6 flex flex-col items-center gap-4">
-            <div className="text-5xl font-mono font-bold tabular-nums">
-              {fmtSeconds(elapsed)}
-            </div>
+            <div className="text-5xl font-mono font-bold tabular-nums">{fmtSeconds(elapsed)}</div>
             {!running ? (
               <Button
                 className={cn("h-14 px-10 font-bold text-base gap-2", def.bg, def.color)}
@@ -1641,9 +1745,7 @@ function LotStartForm({
                 </SelectTrigger>
                 <SelectContent>
                   {(products ?? [])
-                    .filter(
-                      (p) => p.isActive !== false && (p as { code?: string }).code !== "NETT",
-                    )
+                    .filter((p) => p.isActive !== false && (p as { code?: string }).code !== "NETT")
                     .map((p) => (
                       <SelectItem key={p.id} value={p.id} className="py-3">
                         [{(p as { code?: string }).code}] {p.name}
@@ -1851,7 +1953,8 @@ function SessionView({
   equipment: { id: string; code: string; name: string };
   onExit: () => void;
 }) {
-  const [cycleOrder] = useState<Phase[]>(DEFAULT_CYCLE);
+  const { data: cycleData } = useCycleOrder();
+  const [cycleOrder, setCycleOrder] = useState<Phase[]>(DEFAULT_CYCLE);
   const [phaseStatuses, setPhaseStatuses] = useState<Record<Phase, PhaseStatus>>(
     Object.fromEntries(DEFAULT_CYCLE.map((p, i) => [p, i === 0 ? "active" : "todo"])) as Record<
       Phase,
@@ -1859,10 +1962,28 @@ function SessionView({
     >,
   );
   const [activePhase, setActivePhase] = useState<Phase>(DEFAULT_CYCLE[0]);
+  const [orderInitialized, setOrderInitialized] = useState(false);
   const [activeLotId, setActiveLotId] = useState<string | null>(null);
   const [lotView, setLotView] = useState<"start" | "active">("start");
   const [sessionElapsed, setSessionElapsed] = useState(0);
+  const [reorderOpen, setReorderOpen] = useState(false);
   const sessionStartRef = useRef(Date.now());
+
+  // Initialize cycle order from admin default once per mount.
+  useEffect(() => {
+    if (cycleData && !orderInitialized) {
+      const order = cycleData.order as Phase[];
+      setCycleOrder(order);
+      setPhaseStatuses(
+        Object.fromEntries(order.map((p, i) => [p, i === 0 ? "active" : "todo"])) as Record<
+          Phase,
+          PhaseStatus
+        >,
+      );
+      setActivePhase(order[0]);
+      setOrderInitialized(true);
+    }
+  }, [cycleData, orderInitialized]);
 
   useEffect(() => {
     const iv = setInterval(() => {
@@ -1871,31 +1992,43 @@ function SessionView({
     return () => clearInterval(iv);
   }, []);
 
+  // Uses functional updater to avoid stale-closure bugs on rapid transitions.
+  function advancePhase(phase: Phase, newStatus: "done" | "skipped") {
+    setPhaseStatuses((prev) => {
+      const updated = { ...prev, [phase]: newStatus };
+      const idx = cycleOrder.indexOf(phase);
+      const next = cycleOrder.slice(idx + 1).find((p) => updated[p] === "todo");
+      if (next) {
+        updated[next] = "active";
+        setActivePhase(next);
+      }
+      return updated;
+    });
+  }
+
   function markPhaseDone(phase: Phase) {
-    setPhaseStatuses((prev) => ({ ...prev, [phase]: "done" }));
-    const idx = cycleOrder.indexOf(phase);
-    const next = cycleOrder.slice(idx + 1).find((p) => phaseStatuses[p] === "todo");
-    if (next) {
-      setActivePhase(next);
-      setPhaseStatuses((prev) => ({ ...prev, [next]: "active" }));
-    }
+    advancePhase(phase, "done");
   }
 
   function markPhaseSkipped(phase: Phase) {
-    setPhaseStatuses((prev) => ({ ...prev, [phase]: "skipped" }));
-    const idx = cycleOrder.indexOf(phase);
-    const next = cycleOrder.slice(idx + 1).find((p) => phaseStatuses[p] === "todo");
-    if (next) {
-      setActivePhase(next);
-      setPhaseStatuses((prev) => ({ ...prev, [next]: "active" }));
-    }
+    advancePhase(phase, "skipped");
   }
 
   function handlePhaseClick(phase: Phase) {
-    const status = phaseStatuses[phase];
-    if (status === "todo" || status === "done" || status === "active") {
-      setActivePhase(phase);
-    }
+    // Allow free navigation including skipped phases (operator may want to revisit).
+    setActivePhase(phase);
+    setPhaseStatuses((prev) => {
+      const status = prev[phase];
+      if (status === "skipped" || status === "todo") {
+        return { ...prev, [phase]: "active" };
+      }
+      return prev;
+    });
+  }
+
+  function applyReorder(newOrder: Phase[]) {
+    setCycleOrder(newOrder);
+    setReorderOpen(false);
   }
 
   const currentPhaseIdx = cycleOrder.indexOf(activePhase);
@@ -1962,7 +2095,15 @@ function SessionView({
         phaseStatuses={phaseStatuses}
         activePhase={activePhase}
         onPhaseClick={handlePhaseClick}
+        onReorder={() => setReorderOpen(true)}
         elapsed={sessionElapsed}
+      />
+
+      <PhaseReorderDialog
+        open={reorderOpen}
+        onOpenChange={setReorderOpen}
+        order={cycleOrder}
+        onApply={applyReorder}
       />
 
       <div className="flex-1">
@@ -1980,10 +2121,7 @@ function SessionView({
                 Durée totale : {fmtDur(Math.floor(sessionElapsed / 60))}
               </p>
             </div>
-            <Button
-              className="w-full h-14 font-bold text-base"
-              onClick={onExit}
-            >
+            <Button className="w-full h-14 font-bold text-base" onClick={onExit}>
               Terminer et revenir à l'accueil
             </Button>
           </div>
@@ -2010,11 +2148,7 @@ function SessionView({
 }
 
 // ─── Local Picker ──────────────────────────────────────────────────────────────
-function LocalPicker({
-  onSelect,
-}: {
-  onSelect: (room: Room) => void;
-}) {
+function LocalPicker({ onSelect }: { onSelect: (room: Room) => void }) {
   const { data: rooms, isLoading } = useListRooms();
   const today = new Date().toISOString().split("T")[0];
   const { data: entries } = useListProductionEntries({ dateFrom: today, dateTo: today });
@@ -2069,9 +2203,7 @@ function LocalPicker({
                 onClick={() => onSelect(room)}
                 className={cn(
                   "w-full text-left rounded-2xl border p-4 transition-all hover:border-primary/60 hover:bg-primary/5 group",
-                  hasActive
-                    ? "border-amber-500/50 bg-amber-500/5"
-                    : "border-border bg-card",
+                  hasActive ? "border-amber-500/50 bg-amber-500/5" : "border-border bg-card",
                 )}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -2133,10 +2265,8 @@ function MachinePicker({
   const { data: entries } = useListProductionEntries({ dateFrom: today, dateTo: today });
 
   const activeLotByEquip = useMemo(() => {
-    const m = new Map<string, (typeof entries)[0]>();
-    (entries ?? [])
-      .filter((e) => e.status === "draft")
-      .forEach((e) => m.set(e.equipmentId, e));
+    const m = new Map<string, ProductionEntryWithDetails>();
+    (entries ?? []).filter((e) => e.status === "draft").forEach((e) => m.set(e.equipmentId, e));
     return m;
   }, [entries]);
 
@@ -2188,7 +2318,9 @@ function MachinePicker({
                   {activeLot ? (
                     <div className="text-xs text-amber-400 mt-0.5">
                       Lot actif :{" "}
-                      <span className="font-mono">{(activeLot as { batchNumber?: string }).batchNumber ?? "—"}</span>
+                      <span className="font-mono">
+                        {(activeLot as { batchNumber?: string }).batchNumber ?? "—"}
+                      </span>
                     </div>
                   ) : (
                     <div className="text-xs text-muted-foreground mt-0.5">
