@@ -17,6 +17,7 @@ const SupervisorPage = lazy(() => import("@/pages/supervisor"));
 const AnalysisPage = lazy(() => import("@/pages/analysis"));
 const AdminPage = lazy(() => import("@/pages/admin"));
 const UsersPage = lazy(() => import("@/pages/users"));
+const LotsPage = lazy(() => import("@/pages/lots"));
 const PlanningPage = lazy(() => import("@/pages/planning"));
 const ProductionPage = lazy(() => import("@/pages/production"));
 const CalendarPage = lazy(() => import("@/pages/calendar"));
@@ -145,6 +146,14 @@ function Router() {
             <ProtectedRoute allowedRoles={["admin"]}>
               <ErrorBoundary>
                 <UsersPage />
+              </ErrorBoundary>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/lots">
+            <ProtectedRoute allowedRoles={["operator", "supervisor", "admin"]}>
+              <ErrorBoundary>
+                <LotsPage />
               </ErrorBoundary>
             </ProtectedRoute>
           </Route>

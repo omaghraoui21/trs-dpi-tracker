@@ -39,6 +39,12 @@ export function Layout({ children }: LayoutProps) {
       allowed: ["operator", "supervisor", "admin"],
     },
     {
+      title: "Lots du jour",
+      href: "/lots",
+      icon: <ClipboardList className="h-5 w-5" />,
+      allowed: ["supervisor", "admin"],
+    },
+    {
       title: "Revue / Corrections",
       href: "/supervisor",
       icon: <Activity className="h-5 w-5" />,
