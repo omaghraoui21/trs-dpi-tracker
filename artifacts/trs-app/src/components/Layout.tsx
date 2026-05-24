@@ -13,6 +13,8 @@ import {
   Gauge,
   CalendarDays,
   BookOpen,
+  Users,
+  Eraser,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -73,6 +75,18 @@ export function Layout({ children }: LayoutProps) {
       allowed: ["supervisor", "admin"],
     },
     {
+      title: "Utilisateurs",
+      href: "/users",
+      icon: <Users className="h-5 w-5" />,
+      allowed: ["admin"],
+    },
+    {
+      title: "Nettoyage",
+      href: "/cleanup",
+      icon: <Eraser className="h-5 w-5" />,
+      allowed: ["admin"],
+    },
+    {
       title: "Administration",
       href: "/admin",
       icon: <Settings className="h-5 w-5" />,
@@ -80,9 +94,7 @@ export function Layout({ children }: LayoutProps) {
     },
   ];
 
-  const visibleNavItems = navItems.filter((item) =>
-    item.allowed.includes(user.role)
-  );
+  const visibleNavItems = navItems.filter((item) => item.allowed.includes(user.role));
 
   const NavLinks = ({ onNavigate }: { onNavigate?: () => void }) => (
     <nav className="space-y-1 px-3">
@@ -95,7 +107,7 @@ export function Layout({ children }: LayoutProps) {
                 "flex items-center px-3 min-h-[52px] text-sm font-medium rounded-lg transition-colors cursor-pointer",
                 isActive
                   ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
               <span className="mr-3 shrink-0">{item.icon}</span>
@@ -111,17 +123,25 @@ export function Layout({ children }: LayoutProps) {
     <div className="p-4 border-t border-border mt-auto">
       <div className="flex items-center gap-3 px-2 mb-3">
         <Avatar className="h-9 w-9 shrink-0 bg-primary/10 text-primary">
-          <AvatarFallback>{user.firstName[0]}{user.lastName[0]}</AvatarFallback>
+          <AvatarFallback>
+            {user.firstName[0]}
+            {user.lastName[0]}
+          </AvatarFallback>
         </Avatar>
         <div className="flex flex-col overflow-hidden min-w-0">
-          <span className="text-sm font-medium truncate">{user.firstName} {user.lastName}</span>
+          <span className="text-sm font-medium truncate">
+            {user.firstName} {user.lastName}
+          </span>
           <span className="text-xs text-muted-foreground capitalize truncate">{user.role}</span>
         </div>
       </div>
       <Button
         variant="outline"
         className="w-full justify-start h-11"
-        onClick={() => { logout(); onNavigate?.(); }}
+        onClick={() => {
+          logout();
+          onNavigate?.();
+        }}
       >
         <LogOut className="h-4 w-4 mr-2" />
         Déconnexion
@@ -155,7 +175,7 @@ export function Layout({ children }: LayoutProps) {
       <aside
         className={cn(
           "lg:hidden fixed left-0 top-0 bottom-0 z-50 w-72 flex flex-col bg-card border-r border-border transition-transform duration-200",
-          drawerOpen ? "translate-x-0" : "-translate-x-full"
+          drawerOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
         <div className="flex h-16 items-center justify-between px-5 border-b border-border">
@@ -192,9 +212,7 @@ export function Layout({ children }: LayoutProps) {
           <span className="font-bold text-base tracking-tight text-primary">DPI TRS</span>
         </header>
 
-        <div className="flex-1 overflow-auto bg-slate-50/50 dark:bg-background/95">
-          {children}
-        </div>
+        <div className="flex-1 overflow-auto bg-slate-50/50 dark:bg-background/95">{children}</div>
       </main>
     </div>
   );

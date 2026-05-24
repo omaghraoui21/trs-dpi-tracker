@@ -11,15 +11,16 @@ import { toast } from "@/hooks/use-toast";
 import NotFound from "@/pages/not-found";
 
 // Route-level code splitting — each page chunk is loaded on first visit only
-const LoginPage     = lazy(() => import("@/pages/login"));
-const EntryPage     = lazy(() => import("@/pages/entry"));
+const LoginPage = lazy(() => import("@/pages/login"));
+const EntryPage = lazy(() => import("@/pages/entry"));
 const SupervisorPage = lazy(() => import("@/pages/supervisor"));
-const AnalysisPage  = lazy(() => import("@/pages/analysis"));
-const AdminPage     = lazy(() => import("@/pages/admin"));
-const PlanningPage  = lazy(() => import("@/pages/planning"));
+const AnalysisPage = lazy(() => import("@/pages/analysis"));
+const AdminPage = lazy(() => import("@/pages/admin"));
+const UsersPage = lazy(() => import("@/pages/users"));
+const PlanningPage = lazy(() => import("@/pages/planning"));
 const ProductionPage = lazy(() => import("@/pages/production"));
-const CalendarPage       = lazy(() => import("@/pages/calendar"));
-const DailyEntriesPage   = lazy(() => import("@/pages/daily-entries"));
+const CalendarPage = lazy(() => import("@/pages/calendar"));
+const DailyEntriesPage = lazy(() => import("@/pages/daily-entries"));
 
 // ─── Global React Query error handler ────────────────────────────────────────
 function extractMessage(err: unknown): string {
@@ -84,10 +85,14 @@ function RootRedirect() {
   const { user } = useAuth();
   if (!user) return <Redirect to="/login" />;
   switch (user.role) {
-    case "operator":   return <Redirect to="/entry" />;
-    case "supervisor": return <Redirect to="/supervisor" />;
-    case "admin":      return <Redirect to="/admin" />;
-    default:           return <Redirect to="/login" />;
+    case "operator":
+      return <Redirect to="/entry" />;
+    case "supervisor":
+      return <Redirect to="/supervisor" />;
+    case "admin":
+      return <Redirect to="/admin" />;
+    default:
+      return <Redirect to="/login" />;
   }
 }
 
@@ -99,54 +104,88 @@ function Router() {
           <Route path="/login" component={LoginPage} />
 
           <Route path="/">
-            <ProtectedRoute><RootRedirect /></ProtectedRoute>
+            <ProtectedRoute>
+              <RootRedirect />
+            </ProtectedRoute>
           </Route>
 
           <Route path="/entry">
             <ProtectedRoute allowedRoles={["operator", "supervisor", "admin"]}>
-              <ErrorBoundary><EntryPage /></ErrorBoundary>
+              <ErrorBoundary>
+                <EntryPage />
+              </ErrorBoundary>
             </ProtectedRoute>
           </Route>
 
           <Route path="/supervisor">
             <ProtectedRoute allowedRoles={["supervisor", "admin"]}>
-              <ErrorBoundary><SupervisorPage /></ErrorBoundary>
+              <ErrorBoundary>
+                <SupervisorPage />
+              </ErrorBoundary>
             </ProtectedRoute>
           </Route>
 
           <Route path="/analysis">
             <ProtectedRoute allowedRoles={["supervisor", "admin"]}>
-              <ErrorBoundary><AnalysisPage /></ErrorBoundary>
+              <ErrorBoundary>
+                <AnalysisPage />
+              </ErrorBoundary>
             </ProtectedRoute>
           </Route>
 
           <Route path="/admin">
             <ProtectedRoute allowedRoles={["admin"]}>
-              <ErrorBoundary><AdminPage /></ErrorBoundary>
+              <ErrorBoundary>
+                <AdminPage />
+              </ErrorBoundary>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/users">
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <ErrorBoundary>
+                <UsersPage />
+              </ErrorBoundary>
+            </ProtectedRoute>
+          </Route>
+
+          <Route path="/cleanup">
+            <ProtectedRoute allowedRoles={["admin"]}>
+              <ErrorBoundary>
+                <AdminPage initialTab="cleanup" />
+              </ErrorBoundary>
             </ProtectedRoute>
           </Route>
 
           <Route path="/planning">
             <ProtectedRoute allowedRoles={["supervisor", "admin"]}>
-              <ErrorBoundary><PlanningPage /></ErrorBoundary>
+              <ErrorBoundary>
+                <PlanningPage />
+              </ErrorBoundary>
             </ProtectedRoute>
           </Route>
 
           <Route path="/production">
             <ProtectedRoute allowedRoles={["supervisor", "admin"]}>
-              <ErrorBoundary><ProductionPage /></ErrorBoundary>
+              <ErrorBoundary>
+                <ProductionPage />
+              </ErrorBoundary>
             </ProtectedRoute>
           </Route>
 
           <Route path="/calendar">
             <ProtectedRoute allowedRoles={["supervisor", "admin"]}>
-              <ErrorBoundary><CalendarPage /></ErrorBoundary>
+              <ErrorBoundary>
+                <CalendarPage />
+              </ErrorBoundary>
             </ProtectedRoute>
           </Route>
 
           <Route path="/daily-entries">
             <ProtectedRoute allowedRoles={["supervisor", "admin"]}>
-              <ErrorBoundary><DailyEntriesPage /></ErrorBoundary>
+              <ErrorBoundary>
+                <DailyEntriesPage />
+              </ErrorBoundary>
             </ProtectedRoute>
           </Route>
 
