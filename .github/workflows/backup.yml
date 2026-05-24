@@ -15,7 +15,9 @@ jobs:
           PGSSLMODE: require
         run: |
           sudo apt-get install -y postgresql-client
-          pg_dump "$DATABASE_URL" --no-owner --no-acl -Fc -f backup_$(date +%Y%m%d_%H%M%S).dump
+          HOST=$(echo "$DATABASE_URL" | sed -E 's|.*@([^:/]+).*|\1|')
+          IPV4=$(getent ahostsv4 "$HOST" | awk 'NR==1{print $1}')
+          PGHOSTADDR="$IPV4" pg_dump "$DATABASE_URL" --no-owner --no-acl -Fc -f backup_$(date +%Y%m%d_%H%M%S).dump
 
       - name: Upload artifact (90 days retention)
         uses: actions/upload-artifact@v4
