@@ -18,7 +18,6 @@ export * from "./kpi-daily";
 export * from "./kpi-monthly";
 export * from "./audit-log";
 export * from "./kpi-targets";
-export * from "./calculation-formulas";
 export * from "./planning-activity-mappings";
 export * from "./notification-rules";
 export * from "./activities";

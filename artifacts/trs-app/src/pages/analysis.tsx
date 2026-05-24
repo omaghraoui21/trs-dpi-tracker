@@ -19,6 +19,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { KpiLabel } from "@/components/KpiLabel";
 import {
   Select,
   SelectContent,
@@ -259,18 +260,19 @@ function TrsPeriodView({
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {(
             [
-              ["TRS Consolidé", "trs"],
-              ["TRG (tU/tO)", "TRG"],
-              ["Disponibilité (DO)", "DO"],
-              ["Performance (TP)", "TP"],
-              ["Qualité (TQ)", "TQ"],
+              ["TRS Consolidé", "trs", "TRS"],
+              ["TRG", "TRG", "TRG"],
+              ["Disponibilité", "DO", "DO"],
+              ["Performance", "TP", "TP"],
+              ["Qualité", "TQ", "TQ"],
             ] as const
-          ).map(([label, key]) => {
+          ).map(([label, key, kpi]) => {
             const v = avg(key);
             return (
               <div key={label} className="bg-card border border-border rounded-xl p-4">
-                <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-                  {label}
+                <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide flex items-center gap-1">
+                  <KpiLabel kpi={kpi} showIcon={false} />
+                  <span className="opacity-70 normal-case">— {label}</span>
                 </div>
                 <div
                   className="text-2xl font-bold mt-1"

@@ -18,6 +18,7 @@ import {
   LayoutList,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { KpiLabel } from "@/components/KpiLabel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -174,8 +175,7 @@ function EntryDialog({
   }));
 
   const set =
-    (k: keyof EntryFormData) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    (k: keyof EntryFormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setForm((f) => ({ ...f, [k]: e.target.value }));
     };
 
@@ -245,7 +245,12 @@ function EntryDialog({
   const canValidate = isEdit && entry?.status === "draft" && isSupervisor;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -339,17 +344,23 @@ function EntryDialog({
 
           <div className="rounded-lg border bg-muted/30 px-4 py-3 grid grid-cols-3 gap-3 text-sm">
             <div className="text-center">
-              <div className="text-xs text-muted-foreground font-medium">tO</div>
+              <div className="text-xs text-muted-foreground font-medium">
+                <KpiLabel kpi="tO" showIcon={false} />
+              </div>
               <div className="font-semibold text-sky-600">{fmtMin(tO)}</div>
               <div className="text-xs text-muted-foreground">{tO} min</div>
             </div>
             <div className="text-center">
-              <div className="text-xs text-muted-foreground font-medium">tAP</div>
+              <div className="text-xs text-muted-foreground font-medium">
+                <KpiLabel kpi="tAP" showIcon={false} />
+              </div>
               <div className="font-semibold text-amber-600">{fmtMin(tAP)}</div>
               <div className="text-xs text-muted-foreground">{tAP} min</div>
             </div>
             <div className="text-center">
-              <div className="text-xs text-muted-foreground font-medium">tR</div>
+              <div className="text-xs text-muted-foreground font-medium">
+                <KpiLabel kpi="tR" showIcon={false} />
+              </div>
               <div className={cn("font-semibold", tR > 0 ? "text-emerald-600" : "text-red-500")}>
                 {fmtMin(tR)}
               </div>
@@ -439,7 +450,12 @@ function DeleteDialog({
   });
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>Supprimer la fiche ?</DialogTitle>
@@ -545,24 +561,29 @@ function CalendarView({
     return map;
   }, [summary]);
 
-  const calendarCells: Array<{ date: string; day: number; weekNum: number; isWeekend: boolean } | null> =
-    useMemo(() => {
-      const cells: Array<{ date: string; day: number; weekNum: number; isWeekend: boolean } | null> = [];
-      for (let i = 0; i < firstDayOfWeek; i++) cells.push(null);
-      for (let d = 1; d <= daysInMonth; d++) {
-        const date = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-        const dayOfWeek = (firstDayOfWeek + d - 1) % 7; // 0=Mon, 6=Sun
-        cells.push({
-          date,
-          day: d,
-          weekNum: getWeekNumber(new Date(year, month - 1, d)),
-          isWeekend: dayOfWeek >= 5, // Sat=5, Sun=6
-        });
-      }
-      const trailing = (7 - (cells.length % 7)) % 7;
-      for (let i = 0; i < trailing; i++) cells.push(null);
-      return cells;
-    }, [year, month, daysInMonth, firstDayOfWeek]);
+  const calendarCells: Array<{
+    date: string;
+    day: number;
+    weekNum: number;
+    isWeekend: boolean;
+  } | null> = useMemo(() => {
+    const cells: Array<{ date: string; day: number; weekNum: number; isWeekend: boolean } | null> =
+      [];
+    for (let i = 0; i < firstDayOfWeek; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const dayOfWeek = (firstDayOfWeek + d - 1) % 7; // 0=Mon, 6=Sun
+      cells.push({
+        date,
+        day: d,
+        weekNum: getWeekNumber(new Date(year, month - 1, d)),
+        isWeekend: dayOfWeek >= 5, // Sat=5, Sun=6
+      });
+    }
+    const trailing = (7 - (cells.length % 7)) % 7;
+    for (let i = 0; i < trailing; i++) cells.push(null);
+    return cells;
+  }, [year, month, daysInMonth, firstDayOfWeek]);
 
   if (isLoading) {
     return (
@@ -628,7 +649,11 @@ function CalendarView({
                 <span
                   className={cn(
                     "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full",
-                    isToday ? "bg-sky-500 text-white" : cell.isWeekend ? "text-muted-foreground/60" : "text-foreground",
+                    isToday
+                      ? "bg-sky-500 text-white"
+                      : cell.isWeekend
+                        ? "text-muted-foreground/60"
+                        : "text-foreground",
                   )}
                 >
                   {cell.day}
@@ -669,7 +694,9 @@ function CalendarView({
                     <span
                       className={cn(
                         "font-medium text-[10px]",
-                        entry.status === "validated" ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400",
+                        entry.status === "validated"
+                          ? "text-emerald-700 dark:text-emerald-400"
+                          : "text-amber-700 dark:text-amber-400",
                       )}
                     >
                       {entry.status === "validated" ? "Validée" : "Brouillon"}
@@ -678,9 +705,7 @@ function CalendarView({
                   <div className="text-muted-foreground text-[10px]">
                     tR <span className="font-semibold text-foreground">{fmtMin(entry.tR)}</span>
                   </div>
-                  <div className="text-muted-foreground text-[10px]">
-                    tO {fmtMin(entry.tO)}
-                  </div>
+                  <div className="text-muted-foreground text-[10px]">tO {fmtMin(entry.tO)}</div>
                 </div>
               ) : (
                 <div className="flex-1 flex items-center justify-center">
@@ -750,9 +775,8 @@ function ListView({
               })}
             </div>
             <div className="text-xs text-muted-foreground mt-0.5">
-              tR{" "}
-              <span className="font-semibold text-foreground">{fmtMin(e.tR)}</span>{" "}
-              · tO {fmtMin(e.tO)} · tAP {fmtMin(e.tAP)}
+              tR <span className="font-semibold text-foreground">{fmtMin(e.tR)}</span> · tO{" "}
+              {fmtMin(e.tO)} · tAP {fmtMin(e.tAP)}
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -768,7 +792,10 @@ function ListView({
             </span>
             {e.entryDate <= today && e.status !== "validated" && (
               <button
-                onClick={(ev) => { ev.stopPropagation(); onDeleteEntry(e); }}
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  onDeleteEntry(e);
+                }}
                 className="h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -783,13 +810,7 @@ function ListView({
 
 // ─── Equipment selector with room hierarchy ────────────────────────────────────
 
-function EquipmentSelector({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (id: string) => void;
-}) {
+function EquipmentSelector({ value, onChange }: { value: string; onChange: (id: string) => void }) {
   const { data: rooms, isLoading } = useListRooms();
   const [selectedRoom, setSelectedRoom] = useState<string>("");
 
@@ -801,7 +822,7 @@ function EquipmentSelector({
   const roomEquipments = useMemo(
     () =>
       selectedRoom
-        ? (rooms ?? []).find((r) => r.id === selectedRoom)?.equipments ?? []
+        ? ((rooms ?? []).find((r) => r.id === selectedRoom)?.equipments ?? [])
         : (rooms ?? []).flatMap((r) => r.equipments),
     [rooms, selectedRoom],
   );
@@ -869,12 +890,16 @@ export default function DailyEntriesPage() {
   });
 
   function prevMonth() {
-    if (month === 1) { setYear((y) => y - 1); setMonth(12); }
-    else setMonth((m) => m - 1);
+    if (month === 1) {
+      setYear((y) => y - 1);
+      setMonth(12);
+    } else setMonth((m) => m - 1);
   }
   function nextMonth() {
-    if (month === 12) { setYear((y) => y + 1); setMonth(1); }
-    else setMonth((m) => m + 1);
+    if (month === 12) {
+      setYear((y) => y + 1);
+      setMonth(1);
+    } else setMonth((m) => m + 1);
   }
 
   function openCreate(date: string) {
@@ -914,7 +939,9 @@ export default function DailyEntriesPage() {
             <Cpu className="h-10 w-10 text-muted-foreground" />
           </div>
           <div>
-            <p className="font-semibold text-lg text-muted-foreground">Sélectionnez un équipement</p>
+            <p className="font-semibold text-lg text-muted-foreground">
+              Sélectionnez un équipement
+            </p>
             <p className="text-sm text-muted-foreground mt-1">
               Choisissez d'abord le local puis l'équipement pour afficher les fiches du mois.
             </p>

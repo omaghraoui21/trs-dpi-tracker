@@ -269,6 +269,9 @@ type DowntimeEvent = {
 };
 
 // ─── TRS Live Calculation ─────────────────────────────────────────────────────
+// Live preview only — the authoritative TRS value is computed server-side by
+// trs-engine.ts on submit/validate. This mirror exists so the operator sees
+// live feedback while typing, even offline. Keep in sync with trs-engine.ts.
 function computeTrs(params: {
   shiftStart: string;
   shiftEnd: string;

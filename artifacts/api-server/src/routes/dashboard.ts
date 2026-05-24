@@ -351,6 +351,7 @@ router.get(
     }
 
     res.json({
+      source: monthlyData.source,
       currentMonthTrs: monthlyData.trs !== null ? monthlyData.trs * 100 : null,
       currentMonthDO: monthlyData.DO !== null ? monthlyData.DO * 100 : null,
       currentMonthTP: monthlyData.TP !== null ? monthlyData.TP * 100 : null,

@@ -46,6 +46,7 @@ import {
   Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { KpiLabel, type KpiCode } from "@/components/KpiLabel";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -137,16 +138,18 @@ function GaugeBar({
   label,
   value,
   subtitle,
+  kpi,
 }: {
   label: string;
   value: number | null;
   subtitle?: string;
+  kpi?: KpiCode;
 }) {
   const pct = Math.min(100, Math.max(0, value ?? 0));
   return (
     <div className="space-y-1.5">
       <div className="flex justify-between text-sm">
-        <span className="font-medium">{label}</span>
+        <span className="font-medium">{kpi ? <KpiLabel kpi={kpi} showIcon={false} /> : label}</span>
         <span className="font-bold" style={{ color: trsColor(value) }}>
           {trsLabel(value)}
         </span>
@@ -1119,19 +1122,45 @@ export default function SupervisorPage() {
         {/* Right: TRS decomp + triple check */}
         <div className="space-y-4">
           <div className="bg-card border border-border rounded-xl p-5 space-y-5">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2 flex-wrap">
               <Target className="h-4 w-4" /> Décomposition TRS
+              {(monthlyKpis as { source?: "daily" | "production" })?.source && (
+                <span
+                  className="ml-auto text-[10px] font-normal normal-case tracking-normal px-2 py-0.5 rounded-full border border-border bg-muted/40 text-muted-foreground"
+                  title="Source du calcul TRS"
+                >
+                  {(monthlyKpis as { source?: string }).source === "daily"
+                    ? "Source : Fiches Journalières"
+                    : "Source : Saisies Production"}
+                </span>
+              )}
             </h2>
             <GaugeBar
+              kpi="DO"
               label="Disponibilité (DO)"
               value={monthlyKpis?.DO ?? null}
               subtitle="tF / tR"
             />
-            <GaugeBar label="Performance (TP)" value={monthlyKpis?.TP ?? null} subtitle="tN / tF" />
-            <GaugeBar label="Qualité (TQ)" value={monthlyKpis?.TQ ?? null} subtitle="tU / tN" />
+            <GaugeBar
+              kpi="TP"
+              label="Performance (TP)"
+              value={monthlyKpis?.TP ?? null}
+              subtitle="tN / tF"
+            />
+            <GaugeBar
+              kpi="TQ"
+              label="Qualité (TQ)"
+              value={monthlyKpis?.TQ ?? null}
+              subtitle="tU / tN"
+            />
             <div className="pt-2 border-t border-border space-y-3">
-              <GaugeBar label="TRS Consolidé" value={monthlyKpis?.trs ?? null} subtitle="tU / tR" />
-              <GaugeBar label="TRG" value={monthlyKpis?.TRG ?? null} subtitle="tU / tO" />
+              <GaugeBar
+                kpi="TRS"
+                label="TRS Consolidé"
+                value={monthlyKpis?.trs ?? null}
+                subtitle="tU / tR"
+              />
+              <GaugeBar kpi="TRG" label="TRG" value={monthlyKpis?.TRG ?? null} subtitle="tU / tO" />
             </div>
           </div>
 
