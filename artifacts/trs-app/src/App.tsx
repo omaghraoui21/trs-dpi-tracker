@@ -32,6 +32,8 @@ function shouldShowToast(err: unknown): boolean {
   const msg = extractMessage(err);
   // 401 is handled by AuthContext (redirect to login) — don't double-toast
   if (msg.includes("401") || msg.toLowerCase().includes("unauthorized")) return false;
+  // 404 errors are handled inline by each component
+  if (msg.includes("404")) return false;
   return true;
 }
 
