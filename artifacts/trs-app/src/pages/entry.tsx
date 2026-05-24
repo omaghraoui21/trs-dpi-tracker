@@ -1036,12 +1036,34 @@ function LotActiveTracker({
     }
   }
 
+  const closedDt = downtimes.filter((d) => d.status === "closed");
+  const totalArrêtMin = closedDt.reduce((s, d) => s + d.durationMinutes, 0);
+
+  const clotureWarnings = useMemo(() => {
+    const w: string[] = [];
+    if (!entry?.shiftStart || !entry?.shiftEnd) {
+      w.push("Horaire de poste manquant — TRS ne sera pas calculé.");
+    } else {
+      const dur = durationMin(entry.shiftStart, entry.shiftEnd);
+      if (totalArrêtMin > dur) {
+        w.push(`Arrêts (${totalArrêtMin} min) dépassent la durée du poste (${dur} min).`);
+      }
+    }
+    if (conforming > produced) {
+      w.push(`Conforme (${conforming}) > Produit total (${produced}).`);
+    }
+    if (produced === 0) {
+      w.push("Quantité produite nulle.");
+    }
+    if (baseCadence <= 0) {
+      w.push("Aucune cadence validée — TRS ne sera pas calculé.");
+    }
+    return w;
+  }, [entry, produced, conforming, totalArrêtMin, baseCadence]);
+
   if (!entry) {
     return <div className="p-8 text-center text-muted-foreground">Chargement du lot…</div>;
   }
-
-  const closedDt = downtimes.filter((d) => d.status === "closed");
-  const totalArrêtMin = closedDt.reduce((s, d) => s + d.durationMinutes, 0);
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-2xl mx-auto pb-10">
@@ -1577,6 +1599,15 @@ function LotActiveTracker({
                 <AlertTriangle className="h-3 w-3" /> Quantités non enregistrées — elles seront
                 sauvegardées à la clôture.
               </p>
+            )}
+            {clotureWarnings.length > 0 && (
+              <div className="space-y-1 mt-2">
+                {clotureWarnings.map((w, i) => (
+                  <p key={i} className="text-xs text-amber-500 flex items-start gap-1">
+                    <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" /> {w}
+                  </p>
+                ))}
+              </div>
             )}
             {clotureError && <p className="text-sm text-red-500">{clotureError}</p>}
           </div>

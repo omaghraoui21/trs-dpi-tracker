@@ -235,9 +235,111 @@ type PendingEntry = {
     tF: number;
     tN: number;
     tU: number;
+    cadenceMissing?: boolean;
   };
   downtimeEvents?: DowntimeEvent[];
 };
+
+// ─── Coherence Validation ─────────────────────────────────
+type ValidationSeverity = "error" | "warning";
+interface ValidationAlert {
+  severity: ValidationSeverity;
+  code: string;
+  message: string;
+}
+
+function validateEntry(entry: PendingEntry): ValidationAlert[] {
+  const alerts: ValidationAlert[] = [];
+
+  // 1. Time coherence
+  if (!entry.shiftStart || !entry.shiftEnd) {
+    alerts.push({
+      severity: "error",
+      code: "TIME_MISSING",
+      message: "Horaire de poste manquant — TRS non calculable.",
+    });
+  } else {
+    const toMin = (t: string) => {
+      const [h, m] = t.split(":").map(Number);
+      return isNaN(h) || isNaN(m) ? 0 : h * 60 + m;
+    };
+    const s = toMin(entry.shiftStart);
+    const e = toMin(entry.shiftEnd);
+    const dur = e >= s ? e - s : 1440 - s + e;
+    if (dur <= 0) {
+      alerts.push({
+        severity: "error",
+        code: "TIME_ZERO",
+        message: "Durée de poste nulle (début = fin).",
+      });
+    } else if (dur > 720) {
+      alerts.push({
+        severity: "warning",
+        code: "TIME_LONG",
+        message: `Poste de ${Math.round(dur / 60)}h — durée inhabituellement longue.`,
+      });
+    }
+
+    // Downtime coherence: total downtime should not exceed shift duration
+    const dt = entry.downtimeEvents ?? [];
+    const totalDtMin = dt.reduce((s, d) => s + d.durationMinutes, 0);
+    if (totalDtMin > dur) {
+      alerts.push({
+        severity: "error",
+        code: "DT_EXCEEDS_SHIFT",
+        message: `Arrêts (${Math.round(totalDtMin)} min) > durée poste (${dur} min).`,
+      });
+    }
+  }
+
+  // 2. Quantities coherence
+  const produced = entry.quantityProduced ?? 0;
+  const conforming = entry.quantityConforming ?? 0;
+  if (conforming > produced) {
+    alerts.push({
+      severity: "error",
+      code: "QTY_CONFORM_GT_PRODUCED",
+      message: `Conforme (${conforming}) > Produit total (${produced}).`,
+    });
+  }
+  if (produced === 0 && entry.status !== "draft") {
+    alerts.push({
+      severity: "warning",
+      code: "QTY_ZERO",
+      message: "Quantité produite nulle — lot soumis sans production.",
+    });
+  }
+
+  // 3. Cadence validation
+  const trs = entry.trsMetrics;
+  if (trs) {
+    if (trs.TP > 1.2) {
+      alerts.push({
+        severity: "warning",
+        code: "CADENCE_HIGH",
+        message: `TP = ${(trs.TP * 100).toFixed(0)}% — performance au-dessus de la cadence théorique (>120%).`,
+      });
+    }
+    if (trs.TP > 0 && trs.TP < 0.5) {
+      alerts.push({
+        severity: "warning",
+        code: "CADENCE_LOW",
+        message: `TP = ${(trs.TP * 100).toFixed(0)}% — performance très basse par rapport à la cadence théorique.`,
+      });
+    }
+  }
+
+  // 4. TRS guard — cadence missing
+  if (trs && trs.cadenceMissing) {
+    alerts.push({
+      severity: "error",
+      code: "CADENCE_MISSING",
+      message: "Cadence validée absente — TRS affiché mais non fiable.",
+    });
+  }
+
+  return alerts;
+}
 
 // ─── Fiche Lot Modal ──────────────────────────────────────
 function LotFicheModal({
@@ -270,6 +372,8 @@ function LotFicheModal({
   const dt = entry.downtimeEvents ?? [];
   const totalDtMin = dt.reduce((s, d) => s + d.durationMinutes, 0);
   const trs = entry.trsMetrics;
+  const alerts = useMemo(() => validateEntry(entry), [entry]);
+  const hasErrors = alerts.some((a) => a.severity === "error");
 
   async function saveQty() {
     const produced = parseInt(qtyProduced);
@@ -442,6 +546,33 @@ function LotFicheModal({
               <div className="text-[10px] text-muted-foreground text-center">
                 tO = {trs.tO} min — TO calculé automatiquement depuis l'horaire poste
               </div>
+            </div>
+          )}
+
+          {/* ── Validation alerts ── */}
+          {alerts.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5" /> Contrôle cohérence
+              </p>
+              {alerts.map((a) => (
+                <div
+                  key={a.code}
+                  className={cn(
+                    "rounded-lg px-3 py-2 text-sm flex items-start gap-2",
+                    a.severity === "error"
+                      ? "bg-red-500/10 border border-red-500/30 text-red-300"
+                      : "bg-amber-500/10 border border-amber-500/30 text-amber-300",
+                  )}
+                >
+                  {a.severity === "error" ? (
+                    <Info className="h-4 w-4 mt-0.5 shrink-0 text-red-400" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-400" />
+                  )}
+                  <span>{a.message}</span>
+                </div>
+              ))}
             </div>
           )}
 
@@ -663,23 +794,32 @@ function LotFicheModal({
         </div>
 
         {/* ── Footer actions ── */}
-        <div className="sticky bottom-0 bg-card border-t border-border px-6 py-4 flex gap-3">
-          <Button
-            className="bg-green-600 hover:bg-green-500 text-white flex-1 h-11 text-sm font-semibold"
-            onClick={() => {
-              onAction(entry.id, "validate");
-              onClose();
-            }}
-          >
-            <CheckCircle className="h-4 w-4 mr-2" /> Marquer revu
-          </Button>
-          <Button
-            variant="outline"
-            className="border-orange-500/40 text-orange-400 hover:bg-orange-500/10 flex-1 h-11 text-sm font-semibold"
-            onClick={() => setAnomalyOpen(true)}
-          >
-            <AlertTriangle className="h-4 w-4 mr-2" /> Signaler anomalie
-          </Button>
+        <div className="sticky bottom-0 bg-card border-t border-border px-6 py-4 space-y-3">
+          {hasErrors && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-xs text-red-300 flex items-center gap-2">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              {alerts.filter((a) => a.severity === "error").length} erreur(s) de cohérence
+              détectée(s).
+            </div>
+          )}
+          <div className="flex gap-3">
+            <Button
+              className="bg-green-600 hover:bg-green-500 text-white flex-1 h-11 text-sm font-semibold"
+              onClick={() => {
+                onAction(entry.id, "validate");
+                onClose();
+              }}
+            >
+              <CheckCircle className="h-4 w-4 mr-2" /> Marquer revu
+            </Button>
+            <Button
+              variant="outline"
+              className="border-orange-500/40 text-orange-400 hover:bg-orange-500/10 flex-1 h-11 text-sm font-semibold"
+              onClick={() => setAnomalyOpen(true)}
+            >
+              <AlertTriangle className="h-4 w-4 mr-2" /> Signaler anomalie
+            </Button>
+          </div>
         </div>
 
         {/* ── Anomaly dialog ── */}
@@ -733,9 +873,17 @@ function PendingCard({
   const [expanded, setExpanded] = useState(false);
   const [anomalyOpen, setAnomalyOpen] = useState(false);
   const [anomalyComment, setAnomalyComment] = useState("");
+  const alerts = useMemo(() => validateEntry(entry), [entry]);
+  const errorCount = alerts.filter((a) => a.severity === "error").length;
+  const warnCount = alerts.filter((a) => a.severity === "warning").length;
 
   return (
-    <div className="border border-border rounded-xl overflow-hidden bg-card">
+    <div
+      className={cn(
+        "border rounded-xl overflow-hidden bg-card",
+        errorCount > 0 ? "border-red-500/40" : "border-border",
+      )}
+    >
       <button
         className="w-full flex items-center justify-between px-4 py-4 hover:bg-muted/50 transition-colors text-left"
         onClick={() => setExpanded((e) => !e)}
@@ -752,6 +900,16 @@ function PendingCard({
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-2">
+          {(errorCount > 0 || warnCount > 0) && (
+            <span
+              className={cn(
+                "text-[10px] font-semibold px-1.5 py-0.5 rounded",
+                errorCount > 0 ? "bg-red-500/15 text-red-400" : "bg-amber-500/15 text-amber-400",
+              )}
+            >
+              {errorCount > 0 ? `${errorCount} err` : `${warnCount} warn`}
+            </span>
+          )}
           {entry.trsMetrics && (
             <span
               className="text-sm font-bold"
