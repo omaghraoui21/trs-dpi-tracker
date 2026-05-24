@@ -812,7 +812,8 @@ function ListView({
 
 function EquipmentSelector({ value, onChange }: { value: string; onChange: (id: string) => void }) {
   const { data: rooms, isLoading } = useListRooms();
-  const [selectedRoom, setSelectedRoom] = useState<string>("");
+  const ALL_ROOMS = "__all__";
+  const [selectedRoom, setSelectedRoom] = useState<string>(ALL_ROOMS);
 
   const productionRooms = useMemo(
     () => (rooms ?? []).filter((r) => r.equipments.length > 0),
@@ -821,7 +822,7 @@ function EquipmentSelector({ value, onChange }: { value: string; onChange: (id: 
 
   const roomEquipments = useMemo(
     () =>
-      selectedRoom
+      selectedRoom && selectedRoom !== ALL_ROOMS
         ? ((rooms ?? []).find((r) => r.id === selectedRoom)?.equipments ?? [])
         : (rooms ?? []).flatMap((r) => r.equipments),
     [rooms, selectedRoom],
@@ -837,7 +838,7 @@ function EquipmentSelector({ value, onChange }: { value: string; onChange: (id: 
             <SelectValue placeholder="Local…" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Tous</SelectItem>
+            <SelectItem value={ALL_ROOMS}>Tous</SelectItem>
             {productionRooms.map((r) => (
               <SelectItem key={r.id} value={r.id}>
                 <span className="font-mono text-muted-foreground text-xs mr-1">{r.code}</span>
