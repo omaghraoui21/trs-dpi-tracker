@@ -89,6 +89,9 @@ const EVENT_TYPE_CONFIG: Record<
     color: string;
     bg: string;
     border: string;
+    chipBg: string;
+    chipText: string;
+    chipBorder: string;
     icon: React.ReactNode;
     impact: string;
   }
@@ -96,45 +99,60 @@ const EVENT_TYPE_CONFIG: Record<
   CLOSURE: {
     label: "Fermeture",
     shortLabel: "Fermeture",
-    color: "text-slate-300",
-    bg: "bg-slate-700/60",
-    border: "border-slate-600",
+    color: "text-slate-700 dark:text-slate-300",
+    bg: "bg-slate-100 dark:bg-slate-700/60",
+    border: "border-slate-300 dark:border-slate-600",
+    chipBg: "bg-slate-100 dark:bg-slate-800",
+    chipText: "text-slate-700 dark:text-slate-300",
+    chipBorder: "border-slate-300 dark:border-slate-600",
     icon: <Ban className="h-3.5 w-3.5" />,
     impact: "Réduit tO (Temps d'ouverture)",
   },
   HOLIDAY: {
     label: "Jour férié",
     shortLabel: "Férié",
-    color: "text-violet-300",
-    bg: "bg-violet-900/40",
-    border: "border-violet-700",
+    color: "text-violet-700 dark:text-violet-300",
+    bg: "bg-violet-50 dark:bg-violet-900/40",
+    border: "border-violet-300 dark:border-violet-700",
+    chipBg: "bg-violet-50 dark:bg-violet-900/40",
+    chipText: "text-violet-700 dark:text-violet-300",
+    chipBorder: "border-violet-300 dark:border-violet-700",
     icon: <Sun className="h-3.5 w-3.5" />,
     impact: "Réduit tO (Temps d'ouverture)",
   },
   QUALIFICATION: {
     label: "Qualification / Validation",
     shortLabel: "Qualif.",
-    color: "text-amber-300",
-    bg: "bg-amber-900/30",
-    border: "border-amber-700",
+    color: "text-amber-700 dark:text-amber-300",
+    bg: "bg-amber-50 dark:bg-amber-900/30",
+    border: "border-amber-300 dark:border-amber-700",
+    chipBg: "bg-amber-50 dark:bg-amber-900/30",
+    chipText: "text-amber-700 dark:text-amber-300",
+    chipBorder: "border-amber-300 dark:border-amber-700",
     icon: <FlaskConical className="h-3.5 w-3.5" />,
     impact: "Réduit tR (Temps requis) depuis tO",
   },
   TRIAL: {
     label: "Essai (TO / TR / Technologique)",
     shortLabel: "Essai",
-    color: "text-sky-300",
-    bg: "bg-sky-900/30",
-    border: "border-sky-700",
+    color: "text-sky-700 dark:text-sky-300",
+    bg: "bg-sky-50 dark:bg-sky-900/30",
+    border: "border-sky-300 dark:border-sky-700",
+    chipBg: "bg-sky-50 dark:bg-sky-900/30",
+    chipText: "text-sky-700 dark:text-sky-300",
+    chipBorder: "border-sky-300 dark:border-sky-700",
     icon: <FlaskConical className="h-3.5 w-3.5" />,
     impact: "Réduit tR (Temps requis) depuis tO",
   },
   CLEANING_MAJOR: {
     label: "Nettoyage / Désinfection majeur",
     shortLabel: "Nettoyage",
-    color: "text-cyan-300",
-    bg: "bg-cyan-900/30",
-    border: "border-cyan-700",
+    color: "text-cyan-700 dark:text-cyan-300",
+    bg: "bg-cyan-50 dark:bg-cyan-900/30",
+    border: "border-cyan-300 dark:border-cyan-700",
+    chipBg: "bg-cyan-50 dark:bg-cyan-900/30",
+    chipText: "text-cyan-700 dark:text-cyan-300",
+    chipBorder: "border-cyan-300 dark:border-cyan-700",
     icon: <Wrench className="h-3.5 w-3.5" />,
     impact: "Réduit tR (Temps requis) depuis tO",
   },
@@ -405,20 +423,20 @@ function ImpactCard({ impact }: { impact: CalendarImpact }) {
           <p className="font-bold text-lg mt-0.5">{minutesToHours(impact.totalCalendarMinutes)}</p>
           <p className="text-xs text-muted-foreground">{impact.daysInMonth} jours</p>
         </div>
-        <div className="rounded-lg bg-sky-900/30 border border-sky-700/50 p-3">
-          <p className="text-xs text-sky-300">tO (après fermetures)</p>
-          <p className="font-bold text-lg mt-0.5 text-sky-200">{minutesToHours(impact.totalTO)}</p>
-          <p className="text-xs text-sky-400">
+        <div className="rounded-lg bg-sky-50 dark:bg-sky-900/30 border border-sky-200 dark:border-sky-700/50 p-3">
+          <p className="text-xs text-sky-700 dark:text-sky-300">tO (après fermetures)</p>
+          <p className="font-bold text-lg mt-0.5 text-sky-700 dark:text-sky-200">{minutesToHours(impact.totalTO)}</p>
+          <p className="text-xs text-sky-600 dark:text-sky-400">
             −{minutesToHours(impact.tODeductionMinutes)} (
             {toPercent(impact.tODeductionMinutes, impact.totalCalendarMinutes)})
           </p>
         </div>
-        <div className="rounded-lg bg-emerald-900/30 border border-emerald-700/50 p-3">
-          <p className="text-xs text-emerald-300">tR (après qualif/essais)</p>
-          <p className="font-bold text-lg mt-0.5 text-emerald-200">
+        <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700/50 p-3">
+          <p className="text-xs text-emerald-700 dark:text-emerald-300">tR (après qualif/essais)</p>
+          <p className="font-bold text-lg mt-0.5 text-emerald-700 dark:text-emerald-200">
             {minutesToHours(impact.totalTR)}
           </p>
-          <p className="text-xs text-emerald-400">
+          <p className="text-xs text-emerald-600 dark:text-emerald-400">
             −{minutesToHours(impact.tRDeductionMinutes)} (
             {toPercent(impact.tRDeductionMinutes, impact.totalTO)})
           </p>
@@ -436,9 +454,9 @@ function ImpactCard({ impact }: { impact: CalendarImpact }) {
           </p>
           <div className="grid grid-cols-2 gap-2 text-xs">
             {impact.closureMinutes > 0 && (
-              <div className="flex items-center justify-between bg-slate-700/30 rounded px-2.5 py-1.5">
-                <span className="flex items-center gap-1.5">
-                  <Ban className="h-3 w-3 text-slate-400" /> Fermetures (→ tO)
+              <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-700/30 rounded px-2.5 py-1.5">
+                <span className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                  <Ban className="h-3 w-3" /> Fermetures (→ tO)
                 </span>
                 <span className="font-mono font-medium">
                   {minutesToHours(impact.closureMinutes)}
@@ -446,9 +464,9 @@ function ImpactCard({ impact }: { impact: CalendarImpact }) {
               </div>
             )}
             {impact.holidayMinutes > 0 && (
-              <div className="flex items-center justify-between bg-violet-900/20 rounded px-2.5 py-1.5">
-                <span className="flex items-center gap-1.5">
-                  <Sun className="h-3 w-3 text-violet-400" /> Jours fériés (→ tO)
+              <div className="flex items-center justify-between bg-violet-50 dark:bg-violet-900/20 rounded px-2.5 py-1.5">
+                <span className="flex items-center gap-1.5 text-violet-700 dark:text-violet-300">
+                  <Sun className="h-3 w-3" /> Jours fériés (→ tO)
                 </span>
                 <span className="font-mono font-medium">
                   {minutesToHours(impact.holidayMinutes)}
@@ -456,9 +474,9 @@ function ImpactCard({ impact }: { impact: CalendarImpact }) {
               </div>
             )}
             {impact.qualificationMinutes > 0 && (
-              <div className="flex items-center justify-between bg-amber-900/20 rounded px-2.5 py-1.5">
-                <span className="flex items-center gap-1.5">
-                  <FlaskConical className="h-3 w-3 text-amber-400" /> Qualifications (→ tR)
+              <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 rounded px-2.5 py-1.5">
+                <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
+                  <FlaskConical className="h-3 w-3" /> Qualifications (→ tR)
                 </span>
                 <span className="font-mono font-medium">
                   {minutesToHours(impact.qualificationMinutes)}
@@ -466,17 +484,17 @@ function ImpactCard({ impact }: { impact: CalendarImpact }) {
               </div>
             )}
             {impact.trialMinutes > 0 && (
-              <div className="flex items-center justify-between bg-sky-900/20 rounded px-2.5 py-1.5">
-                <span className="flex items-center gap-1.5">
-                  <FlaskConical className="h-3 w-3 text-sky-400" /> Essais (→ tR)
+              <div className="flex items-center justify-between bg-sky-50 dark:bg-sky-900/20 rounded px-2.5 py-1.5">
+                <span className="flex items-center gap-1.5 text-sky-700 dark:text-sky-300">
+                  <FlaskConical className="h-3 w-3" /> Essais (→ tR)
                 </span>
                 <span className="font-mono font-medium">{minutesToHours(impact.trialMinutes)}</span>
               </div>
             )}
             {impact.cleaningMajorMinutes > 0 && (
-              <div className="flex items-center justify-between bg-cyan-900/20 rounded px-2.5 py-1.5">
-                <span className="flex items-center gap-1.5">
-                  <Wrench className="h-3 w-3 text-cyan-400" /> Nettoyages (→ tR)
+              <div className="flex items-center justify-between bg-cyan-50 dark:bg-cyan-900/20 rounded px-2.5 py-1.5">
+                <span className="flex items-center gap-1.5 text-cyan-700 dark:text-cyan-300">
+                  <Wrench className="h-3 w-3" /> Nettoyages (→ tR)
                 </span>
                 <span className="font-mono font-medium">
                   {minutesToHours(impact.cleaningMajorMinutes)}
@@ -805,7 +823,7 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Legend */}
+      {/* Legend — adaptive light/dark colors */}
       <div className="flex flex-wrap gap-2">
         {(
           Object.entries(EVENT_TYPE_CONFIG) as [
@@ -813,19 +831,30 @@ export default function CalendarPage() {
             (typeof EVENT_TYPE_CONFIG)[CalendarEventType],
           ][]
         ).map(([k, v]) => (
-          <div
+          <button
             key={k}
+            onClick={() =>
+              setFilterType((prev) => (prev === k ? "ALL" : (k as CalendarEventType)))
+            }
             className={cn(
-              "flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border font-medium",
-              v.bg,
-              v.color,
-              v.border,
+              "flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border font-medium transition-all",
+              v.chipBg,
+              v.chipText,
+              v.chipBorder,
+              filterType === k && "ring-2 ring-offset-1 ring-current",
             )}
           >
-            {v.icon} {v.label}
-            <span className="opacity-60 text-[10px]">({v.impact.split(" ")[1]})</span>
-          </div>
+            {v.icon} {v.shortLabel}
+          </button>
         ))}
+        {filterType !== "ALL" && (
+          <button
+            onClick={() => setFilterType("ALL")}
+            className="text-xs px-2.5 py-1 rounded-full border border-border text-muted-foreground hover:text-foreground transition-colors"
+          >
+            × Tous
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -850,9 +879,10 @@ export default function CalendarPage() {
             </button>
           </div>
 
-          <MonthCalendarGrid year={year} month={month} events={yearEvents} />
-
+          {/* Impact OEE — promoted above calendar */}
           {impact && <ImpactCard impact={impact} />}
+
+          <MonthCalendarGrid year={year} month={month} events={yearEvents} />
         </div>
 
         {/* Event list — right col */}
@@ -871,12 +901,21 @@ export default function CalendarPage() {
           )}
 
           {!isLoading && filteredMonthEvents.length === 0 && (
-            <div className="rounded-xl border border-dashed border-border p-8 text-center">
-              <Calendar className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">Aucun événement ce mois-ci</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Cliquez sur "Nouvel événement" pour planifier
-              </p>
+            <div className="rounded-xl border border-dashed border-border p-8 text-center space-y-3">
+              <Calendar className="h-8 w-8 text-muted-foreground mx-auto" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Aucun événement ce mois-ci</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Planifiez vos fermetures, qualifications et nettoyages.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => { setEditEvent(null); setDialogOpen(true); }}
+                className="gap-1.5"
+              >
+                <Plus className="h-3.5 w-3.5" /> Planifier un événement
+              </Button>
             </div>
           )}
 
@@ -905,7 +944,7 @@ export default function CalendarPage() {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
-                      className="h-7 w-7 flex items-center justify-center rounded hover:bg-white/10 transition-colors"
+                      className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
                       onClick={() => openEdit(ev)}
                       title="Modifier"
                     >
@@ -913,7 +952,7 @@ export default function CalendarPage() {
                     </button>
                     {deleteConfirm === ev.id ? (
                       <div className="flex items-center gap-1">
-                        <span className="text-xs text-red-400">Supprimer ?</span>
+                        <span className="text-xs text-red-600 dark:text-red-400">Supprimer ?</span>
                         <button
                           className="h-6 px-1.5 rounded bg-red-500 text-white text-xs"
                           onClick={() => deleteMutation.mutate(ev.id)}
@@ -929,7 +968,7 @@ export default function CalendarPage() {
                       </div>
                     ) : (
                       <button
-                        className="h-7 w-7 flex items-center justify-center rounded hover:bg-red-500/20 text-red-400 transition-colors"
+                        className="h-7 w-7 flex items-center justify-center rounded hover:bg-red-100 dark:hover:bg-red-500/20 text-red-500 dark:text-red-400 transition-colors"
                         onClick={() => setDeleteConfirm(ev.id)}
                         title="Supprimer"
                       >
@@ -942,9 +981,9 @@ export default function CalendarPage() {
                   <span
                     className={cn(
                       "px-2 py-0.5 rounded-full border text-[11px] font-medium",
-                      cfg.bg,
-                      cfg.color,
-                      cfg.border,
+                      cfg.chipBg,
+                      cfg.chipText,
+                      cfg.chipBorder,
                     )}
                   >
                     {cfg.impact}

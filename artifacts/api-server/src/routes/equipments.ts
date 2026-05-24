@@ -1,5 +1,5 @@
 import { Router, IRouter } from "express";
-import { db, equipmentsTable } from "@workspace/db";
+import { db, equipmentsTable, roomsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
 import { asyncHandler } from "../lib/async-handler";
@@ -14,7 +14,10 @@ import {
 
 const router: IRouter = Router();
 
-function formatEquipment(e: typeof equipmentsTable.$inferSelect) {
+function formatEquipment(
+  e: typeof equipmentsTable.$inferSelect,
+  room?: { id: string; code: string; name: string } | null,
+) {
   return {
     id: e.id,
     name: e.name,
@@ -23,6 +26,9 @@ function formatEquipment(e: typeof equipmentsTable.$inferSelect) {
     trsObjective: parseFloat(e.trsObjective as unknown as string),
     isActive: e.isActive,
     createdAt: e.createdAt.toISOString(),
+    roomId: e.roomId ?? null,
+    roomCode: room?.code ?? null,
+    roomName: room?.name ?? null,
   };
 }
 
@@ -32,11 +38,22 @@ router.get(
   cache30,
   asyncHandler(async (req, res) => {
     const includeInactive = req.query["includeInactive"] === "true";
-    const query = db.select().from(equipmentsTable).$dynamic();
     const rows = includeInactive
-      ? await query.orderBy(equipmentsTable.name)
-      : await query.where(eq(equipmentsTable.isActive, true)).orderBy(equipmentsTable.name);
-    res.json(rows.map(formatEquipment));
+      ? await db.select().from(equipmentsTable).orderBy(equipmentsTable.name)
+      : await db
+          .select()
+          .from(equipmentsTable)
+          .where(eq(equipmentsTable.isActive, true))
+          .orderBy(equipmentsTable.name);
+
+    const roomIds = [...new Set(rows.map((r) => r.roomId).filter(Boolean))] as string[];
+    const rooms =
+      roomIds.length > 0
+        ? await db.select().from(roomsTable).where(eq(roomsTable.status, "active"))
+        : [];
+    const roomMap = new Map(rooms.map((r) => [r.id, r]));
+
+    res.json(rows.map((e) => formatEquipment(e, e.roomId ? (roomMap.get(e.roomId) ?? null) : null)));
   }),
 );
 
@@ -65,7 +82,7 @@ router.post(
         action: "create",
         newValues: row as unknown as Record<string, unknown>,
       });
-      res.status(201).json(formatEquipment(row));
+      res.status(201).json(formatEquipment(row, null));
     } catch (err) {
       if (isUniqueViolation(err)) {
         res.status(409).json({ error: "Un équipement avec ce code existe déjà" });
@@ -117,7 +134,7 @@ router.patch(
         oldValues: before as unknown as Record<string, unknown>,
         newValues: row as unknown as Record<string, unknown>,
       });
-      res.json(formatEquipment(row));
+      res.json(formatEquipment(row, null));
     } catch (err) {
       if (isUniqueViolation(err)) {
         res.status(409).json({ error: "Un équipement avec ce code existe déjà" });

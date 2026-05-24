@@ -10,8 +10,9 @@ import {
   useListProductionEntries,
   getListProductionEntriesQueryKey,
   customFetch,
+  useListRooms,
 } from "@workspace/api-client-react";
-import type { ProductionEntryWithDetails } from "@workspace/api-client-react";
+import type { ProductionEntryWithDetails, Room } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
@@ -30,6 +31,13 @@ import {
   AlarmClock,
   ChevronDown,
   Droplets,
+  Wind,
+  FlaskConical,
+  ShieldCheck,
+  ArrowRight,
+  SkipForward,
+  Building2,
+  Cpu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +58,80 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+
+// ─── Phase definitions ─────────────────────────────────────────────────────────
+type Phase = "VIDE_LIGNE" | "REMPLISSAGE" | "LOT" | "NETTOYAGE" | "DESINFECTION";
+type PhaseStatus = "todo" | "active" | "done" | "skipped";
+
+interface PhaseDef {
+  id: Phase;
+  label: string;
+  shortLabel: string;
+  description: string;
+  icon: React.ReactNode;
+  color: string;
+  bg: string;
+  borderActive: string;
+}
+
+const PHASE_DEFS: PhaseDef[] = [
+  {
+    id: "VIDE_LIGNE",
+    label: "Vide de ligne",
+    shortLabel: "Vide ligne",
+    description: "Vérification et vide de la ligne avant production",
+    icon: <Wind className="h-4 w-4" />,
+    color: "text-sky-400",
+    bg: "bg-sky-500/10",
+    borderActive: "border-sky-500",
+  },
+  {
+    id: "REMPLISSAGE",
+    label: "Remplissage / Chargement",
+    shortLabel: "Remplissage",
+    description: "Chargement matière première et articles de conditionnement",
+    icon: <PackageOpen className="h-4 w-4" />,
+    color: "text-amber-400",
+    bg: "bg-amber-500/10",
+    borderActive: "border-amber-500",
+  },
+  {
+    id: "LOT",
+    label: "Production du lot",
+    shortLabel: "Lot",
+    description: "Fabrication en cours — saisie quantités et arrêts",
+    icon: <Gauge className="h-4 w-4" />,
+    color: "text-emerald-400",
+    bg: "bg-emerald-500/10",
+    borderActive: "border-emerald-500",
+  },
+  {
+    id: "NETTOYAGE",
+    label: "Nettoyage équipement",
+    shortLabel: "Nettoyage",
+    description: "Nettoyage et démontage de l'équipement après production",
+    icon: <Droplets className="h-4 w-4" />,
+    color: "text-cyan-400",
+    bg: "bg-cyan-500/10",
+    borderActive: "border-cyan-500",
+  },
+  {
+    id: "DESINFECTION",
+    label: "Désinfection local",
+    shortLabel: "Désinfection",
+    description: "Désinfection du local et libération de zone",
+    icon: <ShieldCheck className="h-4 w-4" />,
+    color: "text-violet-400",
+    bg: "bg-violet-500/10",
+    borderActive: "border-violet-500",
+  },
+];
+
+const DEFAULT_CYCLE: Phase[] = ["VIDE_LIGNE", "REMPLISSAGE", "LOT", "NETTOYAGE", "DESINFECTION"];
+
+function getPhase(id: Phase) {
+  return PHASE_DEFS.find((p) => p.id === id)!;
+}
 
 // ─── Shift Schedules ──────────────────────────────────────────────────────────
 type ShiftMode = "standard" | "exc_2p" | "ram_1p" | "ram_2p";
@@ -140,13 +222,6 @@ const DEFAULT_CFG: EquipCfg = {
   cadenceInMin: false,
 };
 
-// Raccourcis arrêts par équipement (codes catégories)
-const QUICK_DT_CODES: Record<string, string[]> = {
-  A27: ["AG", "ALIM_GEL", "NET_MIN_EQ", "CHSG"],
-  A28: ["AB", "CHG_ALU", "CHG_PVC", "NET_MIN_EQ"],
-};
-const FALLBACK_DT_CODES = ["ATTENTE-MAT", "NET_MIN_EQ", "PAUSE", "CHSG"];
-
 function fmtCadence(c: number, cfg: EquipCfg): string {
   if (c <= 0) return "—";
   return cfg.cadenceInMin ? `${Math.round(c / 60)} gél/min` : `${c} u/h`;
@@ -222,7 +297,6 @@ function computeTrs(params: {
 }
 
 // ─── Arrêt Modal ──────────────────────────────────────────────────────────────
-// mode: "live" = start live arrêt | number = micro-arrêt with preset minutes
 function ArrêtModal({
   open,
   mode,
@@ -236,111 +310,95 @@ function ArrêtModal({
   categories: { id: string; code: string; label: string; isPlanned: boolean }[];
   onClose: () => void;
   onConfirmLive: (categoryId: string) => Promise<void>;
-  onConfirmMicro: (categoryId: string, minutes: number, endTime: string) => Promise<void>;
+  onConfirmMicro: (
+    categoryId: string,
+    minutes: number,
+    startTime: string,
+    comment?: string,
+  ) => Promise<void>;
 }) {
-  const [categoryId, setCategoryId] = useState("");
-  const [customMin, setCustomMin] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [selectedCat, setSelectedCat] = useState("");
+  const [comment, setComment] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setCategoryId("");
-      setCustomMin("");
-      setError("");
+      setSelectedCat("");
+      setComment("");
     }
   }, [open]);
 
-  const effectiveMin =
-    mode === "live" ? null : typeof mode === "number" ? mode : parseInt(customMin, 10) || null;
-  const isMicro = mode !== "live";
-
   async function handleConfirm() {
-    if (!categoryId) {
-      setError("Veuillez sélectionner une catégorie");
-      return;
-    }
-    if (isMicro && (!effectiveMin || effectiveMin <= 0)) {
-      setError("Durée invalide");
-      return;
-    }
-    setLoading(true);
-    setError("");
+    if (!selectedCat) return;
+    setSaving(true);
     try {
-      if (!isMicro) {
-        await onConfirmLive(categoryId);
-      } else {
-        const now = nowHHMM();
-        const startMin = timeToMin(now) - effectiveMin!;
-        const startHH = Math.floor((((startMin % 1440) + 1440) % 1440) / 60);
-        const startMM = (((startMin % 1440) + 1440) % 1440) % 60;
-        const startTime = `${String(startHH).padStart(2, "0")}:${String(startMM).padStart(2, "0")}`;
-        await onConfirmMicro(categoryId, effectiveMin!, startTime);
+      if (mode === "live") {
+        await onConfirmLive(selectedCat);
+      } else if (typeof mode === "number") {
+        const sm = timeToMin(nowHHMM()) - mode;
+        const hh = Math.floor((((sm % 1440) + 1440) % 1440) / 60);
+        const mm = (((sm % 1440) + 1440) % 1440) % 60;
+        const startTime = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+        await onConfirmMicro(selectedCat, mode, startTime, comment || undefined);
       }
       onClose();
-    } catch (e) {
-      setError((e as Error).message);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={() => onClose()}>
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>
-            {isMicro
-              ? `Micro-arrêt${typeof mode === "number" ? ` (${mode} min)` : ""}`
-              : "Démarrer un arrêt"}
+            {mode === "live" ? "Démarrer un arrêt" : `Micro-arrêt ${mode ?? 0} min`}
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-2">
-            <Label>Catégorie d'arrêt</Label>
-            <Select value={categoryId} onValueChange={setCategoryId}>
-              <SelectTrigger className="h-11">
-                <SelectValue placeholder="Sélectionner…" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id} className="py-3">
-                    <span className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "w-2 h-2 rounded-full shrink-0",
-                          c.isPlanned ? "bg-blue-500" : "bg-red-500",
-                        )}
-                      />
-                      [{c.code}] {c.label}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="space-y-3 py-2">
+          <div className="grid grid-cols-1 gap-1.5 max-h-56 overflow-y-auto">
+            {categories.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setSelectedCat(c.id)}
+                className={cn(
+                  "text-left px-3 py-2.5 rounded-lg border text-sm transition-colors",
+                  selectedCat === c.id
+                    ? c.isPlanned
+                      ? "border-blue-500 bg-blue-500/10 text-blue-300"
+                      : "border-red-500 bg-red-500/10 text-red-300"
+                    : "border-border bg-card text-muted-foreground hover:border-border/80",
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "w-2 h-2 rounded-full shrink-0",
+                      c.isPlanned ? "bg-blue-400" : "bg-red-400",
+                    )}
+                  />
+                  <span className="font-medium">[{c.code}]</span>
+                  <span className="truncate">{c.label}</span>
+                </div>
+              </button>
+            ))}
           </div>
-          {isMicro && typeof mode !== "number" && (
-            <div className="space-y-2">
-              <Label>Durée (minutes)</Label>
-              <Input
-                value={customMin}
-                onChange={(e) => setCustomMin(e.target.value)}
-                type="number"
-                min={1}
-                max={60}
-                placeholder="Ex: 8"
-                className="h-11"
-              />
-            </div>
+          {typeof mode === "number" && (
+            <Textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="Commentaire (optionnel)"
+              className="resize-none text-sm"
+              rows={2}
+            />
           )}
-          {error && <p className="text-sm text-red-500">{error}</p>}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={loading}>
+          <Button variant="outline" onClick={onClose}>
             Annuler
           </Button>
-          <Button onClick={handleConfirm} disabled={loading || !categoryId}>
-            {loading ? "…" : isMicro ? "Enregistrer" : "Démarrer"}
+          <Button disabled={!selectedCat || saving} onClick={handleConfirm}>
+            {saving ? "…" : "Confirmer"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -348,7 +406,204 @@ function ArrêtModal({
   );
 }
 
-// ─── Lot Active Tracker ───────────────────────────────────────────────────────
+// ─── Phase Rail (sticky header) ────────────────────────────────────────────────
+function PhaseRail({
+  room,
+  equipment,
+  cycleOrder,
+  phaseStatuses,
+  activePhase,
+  onPhaseClick,
+  elapsed,
+}: {
+  room: Room;
+  equipment: { id: string; code: string; name: string };
+  cycleOrder: Phase[];
+  phaseStatuses: Record<Phase, PhaseStatus>;
+  activePhase: Phase;
+  onPhaseClick: (p: Phase) => void;
+  elapsed: number;
+}) {
+  return (
+    <div className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border">
+      {/* Context bar */}
+      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border/50">
+        <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+        <span className="text-sm font-medium text-foreground truncate">
+          {room.code} — {room.name}
+        </span>
+        <Cpu className="h-4 w-4 text-muted-foreground shrink-0 ml-1" />
+        <span className="text-sm text-muted-foreground truncate">{equipment.name}</span>
+        <div className="ml-auto flex items-center gap-1.5 shrink-0 text-muted-foreground text-xs">
+          <Clock className="h-3.5 w-3.5" />
+          <span className="tabular-nums font-mono">{fmtSeconds(elapsed)}</span>
+        </div>
+      </div>
+
+      {/* Phase stepper horizontal */}
+      <div className="flex items-center gap-0 overflow-x-auto px-2 py-2 no-scrollbar">
+        {cycleOrder.map((phaseId, idx) => {
+          const def = getPhase(phaseId);
+          const status = phaseStatuses[phaseId];
+          const isActive = phaseId === activePhase;
+
+          return (
+            <button
+              key={phaseId}
+              onClick={() => onPhaseClick(phaseId)}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0",
+                isActive && `${def.bg} ${def.color} ${def.borderActive} border`,
+                !isActive && status === "done" && "text-emerald-500",
+                !isActive && status === "todo" && "text-muted-foreground hover:text-foreground",
+                !isActive && status === "skipped" && "text-muted-foreground/40 line-through",
+              )}
+            >
+              {status === "done" ? (
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+              ) : isActive ? (
+                <span className={def.color}>{def.icon}</span>
+              ) : (
+                <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px]">
+                  {idx + 1}
+                </span>
+              )}
+              <span className="hidden sm:block">{def.shortLabel}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Simple Phase Panel (for VIDE_LIGNE, REMPLISSAGE, NETTOYAGE, DESINFECTION) ─
+function SimplePhasePanel({
+  phase,
+  onDone,
+  onSkip,
+  onNext,
+  hasNext,
+}: {
+  phase: Phase;
+  onDone: (durationMin: number, comment: string) => void;
+  onSkip: () => void;
+  onNext: () => void;
+  hasNext: boolean;
+}) {
+  const def = getPhase(phase);
+  const [running, setRunning] = useState(false);
+  const [startedAt, setStartedAt] = useState<Date | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const [comment, setComment] = useState("");
+  const [done, setDone] = useState(false);
+  const [doneMin, setDoneMin] = useState(0);
+
+  useEffect(() => {
+    if (!running || !startedAt) return;
+    const iv = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAt.getTime()) / 1000));
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [running, startedAt]);
+
+  function handleStart() {
+    setStartedAt(new Date());
+    setRunning(true);
+    setElapsed(0);
+  }
+
+  function handleStop() {
+    setRunning(false);
+    const min = Math.ceil(elapsed / 60);
+    setDoneMin(min);
+    setDone(true);
+  }
+
+  function handleConfirm() {
+    onDone(doneMin, comment);
+  }
+
+  return (
+    <div className="p-4 md:p-6 max-w-lg mx-auto space-y-5">
+      {/* Phase header */}
+      <div
+        className={cn("rounded-2xl border p-5 space-y-2 text-center", def.bg, def.borderActive)}
+      >
+        <div className={cn("flex justify-center", def.color)}>{def.icon}</div>
+        <h2 className="text-xl font-bold">{def.label}</h2>
+        <p className="text-sm text-muted-foreground">{def.description}</p>
+      </div>
+
+      {!done ? (
+        <>
+          {/* Timer */}
+          <div className="bg-card border border-border rounded-2xl p-6 flex flex-col items-center gap-4">
+            <div className="text-5xl font-mono font-bold tabular-nums">
+              {fmtSeconds(elapsed)}
+            </div>
+            {!running ? (
+              <Button
+                className={cn("h-14 px-10 font-bold text-base gap-2", def.bg, def.color)}
+                variant="outline"
+                onClick={handleStart}
+              >
+                <Play className="h-5 w-5" /> Démarrer le chrono
+              </Button>
+            ) : (
+              <Button
+                className="h-14 px-10 font-bold text-base gap-2 bg-red-600 hover:bg-red-500 text-white"
+                onClick={handleStop}
+              >
+                <StopCircle className="h-5 w-5" /> Terminer
+              </Button>
+            )}
+          </div>
+
+          {/* Skip */}
+          {!running && (
+            <button
+              onClick={onSkip}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full justify-center py-2"
+            >
+              <SkipForward className="h-3.5 w-3.5" /> Passer cette phase
+            </button>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Summary + comment */}
+          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center gap-2 text-emerald-400 font-semibold">
+              <CheckCircle2 className="h-5 w-5" />
+              Phase terminée — {fmtDur(doneMin)}
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Commentaire / observations (optionnel)</Label>
+              <Textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                className="resize-none text-sm"
+                rows={3}
+                placeholder="Ex: RAS — conforme au protocole"
+              />
+            </div>
+          </div>
+
+          <Button
+            className="w-full h-14 font-bold text-base gap-2 bg-emerald-600 hover:bg-emerald-500 text-white"
+            onClick={handleConfirm}
+          >
+            <CheckCircle2 className="h-5 w-5" />
+            Valider et {hasNext ? "passer à la suite" : "terminer le cycle"}
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Lot Active Tracker ────────────────────────────────────────────────────────
 function LotActiveTracker({
   lotId,
   onClosed,
@@ -398,7 +653,7 @@ function LotActiveTracker({
     function check() {
       const now = new Date();
       const mins = now.getHours() * 60 + now.getMinutes();
-      setIsPauseTime(mins >= 720 && mins < 780); // 12:00–13:00
+      setIsPauseTime(mins >= 720 && mins < 780);
     }
     check();
     const iv = setInterval(check, 60000);
@@ -480,11 +735,11 @@ function LotActiveTracker({
     return c ? Number(c.validatedCadence) : 0;
   }, [allCadences, entry]);
 
-  const currentCadence = useMemo(() => {
-    return cadenceChanges.length > 0
-      ? cadenceChanges[cadenceChanges.length - 1].value
-      : baseCadence;
-  }, [baseCadence, cadenceChanges]);
+  const currentCadence = useMemo(
+    () =>
+      cadenceChanges.length > 0 ? cadenceChanges[cadenceChanges.length - 1].value : baseCadence,
+    [baseCadence, cadenceChanges],
+  );
 
   const effectiveCadence = useMemo(() => {
     if (!entry?.shiftStart || !entry?.shiftEnd || cadenceChanges.length === 0) return baseCadence;
@@ -755,7 +1010,6 @@ function LotActiveTracker({
           </div>
         </div>
 
-        {/* Cadence change history chip */}
         {cadenceChanges.length > 0 && (
           <div className="flex gap-1.5 flex-wrap">
             {cadenceChanges.map((ch, i) => (
@@ -769,7 +1023,6 @@ function LotActiveTracker({
           </div>
         )}
 
-        {/* Quick add buttons — adaptive per equipment */}
         <div className="grid grid-cols-4 gap-2">
           {equipCfg.increments.map((n) => (
             <Button
@@ -784,7 +1037,6 @@ function LotActiveTracker({
           ))}
         </div>
 
-        {/* Produced / Conforming inputs */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label className="text-xs">Produit total</Label>
@@ -815,7 +1067,6 @@ function LotActiveTracker({
           </div>
         </div>
 
-        {/* Lot progress bar */}
         {equipCfg.lotSize > 0 && (
           <div className="space-y-1">
             <div className="flex justify-between text-xs text-muted-foreground">
@@ -862,7 +1113,6 @@ function LotActiveTracker({
           </h2>
         </div>
 
-        {/* Action buttons */}
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
@@ -885,7 +1135,6 @@ function LotActiveTracker({
           ))}
         </div>
 
-        {/* Raccourcis catégories pré-programmées */}
         {quickDtCodes.length > 0 && (
           <div className="flex flex-wrap gap-2">
             <span className="text-xs text-muted-foreground self-center whitespace-nowrap">
@@ -920,7 +1169,6 @@ function LotActiveTracker({
           </div>
         )}
 
-        {/* Closed arrêts list */}
         {closedDt.length > 0 ? (
           <div className="space-y-1 max-h-48 overflow-y-auto">
             {closedDt.map((d) => (
@@ -961,7 +1209,6 @@ function LotActiveTracker({
         )}
       </div>
 
-      {/* Clôturer lot */}
       <Button
         className="w-full h-14 bg-green-600 hover:bg-green-500 text-white font-bold text-base"
         onClick={() => setShowCloture(true)}
@@ -971,7 +1218,6 @@ function LotActiveTracker({
         Clôturer le lot
       </Button>
 
-      {/* Arrêt Modal */}
       <ArrêtModal
         open={arrêtModal !== null}
         mode={arrêtModal}
@@ -981,7 +1227,6 @@ function LotActiveTracker({
         onConfirmMicro={addMicroArrêt}
       />
 
-      {/* Cadence Change Modal */}
       <Dialog open={showCadenceModal} onOpenChange={setShowCadenceModal}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
@@ -1047,7 +1292,6 @@ function LotActiveTracker({
         </DialogContent>
       </Dialog>
 
-      {/* Quick Downtime Modal */}
       <Dialog
         open={quickCatModal !== null}
         onOpenChange={(v) => {
@@ -1127,7 +1371,6 @@ function LotActiveTracker({
         </DialogContent>
       </Dialog>
 
-      {/* Clôturer Confirmation */}
       <Dialog open={showCloture} onOpenChange={setShowCloture}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -1190,17 +1433,17 @@ function LotActiveTracker({
   );
 }
 
-// ─── Lot Start Form ───────────────────────────────────────────────────────────
+// ─── Lot Start Form (embedded in LOT phase) ────────────────────────────────────
 function LotStartForm({
+  equipmentId,
   onStarted,
   onCancel,
 }: {
+  equipmentId: string;
   onStarted: (id: string) => void;
   onCancel: () => void;
 }) {
   const today = new Date().toISOString().split("T")[0];
-  const [activityType, setActivityType] = useState<"production" | "nettoyage">("production");
-  const [equipmentId, setEquipmentId] = useState("");
   const [productId, setProductId] = useState("");
   const [presentationId, setPresentationId] = useState<string>("");
   const [batchNumber, setBatchNumber] = useState("");
@@ -1209,18 +1452,24 @@ function LotStartForm({
   const [posteIdx, setPosteIdx] = useState(0);
   const [showOtherShifts, setShowOtherShifts] = useState(false);
   const [error, setError] = useState("");
+  const [activityType, setActivityType] = useState<"production" | "nettoyage">("production");
 
-  const { data: equipments } = useListEquipments();
   const { data: products } = useListProducts();
   const createEntry = useCreateProductionEntry();
   const qc = useQueryClient();
+  const { data: allEquipments } = useListEquipments();
 
   const nettProduct = useMemo(
     () => (products ?? []).find((p) => (p as { code?: string }).code === "NETT"),
     [products],
   );
 
-  // Auto-set productId and fetch batch suggestion when productId changes (production mode)
+  const equipCode = useMemo(() => {
+    const eq = (allEquipments ?? []).find((e) => e.id === equipmentId);
+    return (eq as { code?: string } | undefined)?.code ?? "";
+  }, [allEquipments, equipmentId]);
+  const startCfg = useMemo(() => EQUIP_CFG[equipCode] ?? DEFAULT_CFG, [equipCode]);
+
   useEffect(() => {
     if (activityType !== "production" || !productId) return;
     customFetch<{ suggestion: string }>(
@@ -1233,7 +1482,6 @@ function LotStartForm({
       .catch(() => {});
   }, [productId, activityType]);
 
-  // Auto-select the single presentation when the product has only one, reset when product changes
   const currentProduct = useMemo(
     () => (products ?? []).find((p) => p.id === productId),
     [products, productId],
@@ -1252,7 +1500,6 @@ function LotStartForm({
     }
   }, [productId, productPresentations.length]);
 
-  // When switching to nettoyage: auto-assign NETT product and fetch batch suggestion
   useEffect(() => {
     if (activityType === "nettoyage" && nettProduct) {
       setProductId(nettProduct.id);
@@ -1271,20 +1518,10 @@ function LotStartForm({
     }
   }, [activityType, nettProduct?.id]);
 
-  const equipCode = useMemo(() => {
-    const eq = (equipments ?? []).find((e) => e.id === equipmentId);
-    return (eq as { code?: string } | undefined)?.code ?? "";
-  }, [equipments, equipmentId]);
-  const startCfg = useMemo(() => EQUIP_CFG[equipCode] ?? DEFAULT_CFG, [equipCode]);
-
   const mode = SHIFT_MODES[shiftMode];
   const poste = mode.postes[posteIdx];
 
   async function handleStart() {
-    if (!equipmentId) {
-      setError("Sélectionner un équipement");
-      return;
-    }
     if (activityType === "production") {
       if (!productId) {
         setError("Sélectionner un produit");
@@ -1378,7 +1615,6 @@ function LotStartForm({
           </div>
         </div>
 
-        {/* Bannière info nettoyage */}
         {activityType === "nettoyage" && (
           <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-3 flex items-start gap-3 text-sm">
             <Droplets className="h-4 w-4 text-cyan-400 mt-0.5 shrink-0" />
@@ -1395,25 +1631,6 @@ function LotStartForm({
           </div>
         )}
 
-        <div className="space-y-2">
-          <Label>Équipement</Label>
-          <Select value={equipmentId} onValueChange={setEquipmentId}>
-            <SelectTrigger className="h-12">
-              <SelectValue placeholder="Sélectionner…" />
-            </SelectTrigger>
-            <SelectContent>
-              {(equipments ?? [])
-                .filter((e) => e.isActive !== false)
-                .map((e) => (
-                  <SelectItem key={e.id} value={e.id} className="py-3">
-                    [{e.code}] {e.name}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Produit + lot — masqués en mode nettoyage */}
         {activityType === "production" && (
           <>
             <div className="space-y-2">
@@ -1424,7 +1641,9 @@ function LotStartForm({
                 </SelectTrigger>
                 <SelectContent>
                   {(products ?? [])
-                    .filter((p) => p.isActive !== false && (p as { code?: string }).code !== "NETT")
+                    .filter(
+                      (p) => p.isActive !== false && (p as { code?: string }).code !== "NETT",
+                    )
                     .map((p) => (
                       <SelectItem key={p.id} value={p.id} className="py-3">
                         [{(p as { code?: string }).code}] {p.name}
@@ -1483,7 +1702,6 @@ function LotStartForm({
 
         <div className="space-y-2">
           <Label>Horaire de travail</Label>
-          {/* Standard — affiché en premier */}
           <button
             onClick={() => {
               setShiftMode("standard");
@@ -1504,7 +1722,6 @@ function LotStartForm({
             {shiftMode === "standard" && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
           </button>
 
-          {/* Autres horaires — collapsible */}
           <button
             type="button"
             onClick={() => setShowOtherShifts((s) => !s)}
@@ -1624,7 +1841,372 @@ function LotStartForm({
   );
 }
 
-// ─── Lot List View ────────────────────────────────────────────────────────────
+// ─── Session View (cycle complet du local) ────────────────────────────────────
+function SessionView({
+  room,
+  equipment,
+  onExit,
+}: {
+  room: Room;
+  equipment: { id: string; code: string; name: string };
+  onExit: () => void;
+}) {
+  const [cycleOrder] = useState<Phase[]>(DEFAULT_CYCLE);
+  const [phaseStatuses, setPhaseStatuses] = useState<Record<Phase, PhaseStatus>>(
+    Object.fromEntries(DEFAULT_CYCLE.map((p, i) => [p, i === 0 ? "active" : "todo"])) as Record<
+      Phase,
+      PhaseStatus
+    >,
+  );
+  const [activePhase, setActivePhase] = useState<Phase>(DEFAULT_CYCLE[0]);
+  const [activeLotId, setActiveLotId] = useState<string | null>(null);
+  const [lotView, setLotView] = useState<"start" | "active">("start");
+  const [sessionElapsed, setSessionElapsed] = useState(0);
+  const sessionStartRef = useRef(Date.now());
+
+  useEffect(() => {
+    const iv = setInterval(() => {
+      setSessionElapsed(Math.floor((Date.now() - sessionStartRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(iv);
+  }, []);
+
+  function markPhaseDone(phase: Phase) {
+    setPhaseStatuses((prev) => ({ ...prev, [phase]: "done" }));
+    const idx = cycleOrder.indexOf(phase);
+    const next = cycleOrder.slice(idx + 1).find((p) => phaseStatuses[p] === "todo");
+    if (next) {
+      setActivePhase(next);
+      setPhaseStatuses((prev) => ({ ...prev, [next]: "active" }));
+    }
+  }
+
+  function markPhaseSkipped(phase: Phase) {
+    setPhaseStatuses((prev) => ({ ...prev, [phase]: "skipped" }));
+    const idx = cycleOrder.indexOf(phase);
+    const next = cycleOrder.slice(idx + 1).find((p) => phaseStatuses[p] === "todo");
+    if (next) {
+      setActivePhase(next);
+      setPhaseStatuses((prev) => ({ ...prev, [next]: "active" }));
+    }
+  }
+
+  function handlePhaseClick(phase: Phase) {
+    const status = phaseStatuses[phase];
+    if (status === "todo" || status === "done" || status === "active") {
+      setActivePhase(phase);
+    }
+  }
+
+  const currentPhaseIdx = cycleOrder.indexOf(activePhase);
+  const hasNext = cycleOrder.slice(currentPhaseIdx + 1).some((p) => phaseStatuses[p] === "todo");
+
+  function renderPhaseContent() {
+    if (activePhase === "LOT") {
+      if (lotView === "start") {
+        return (
+          <LotStartForm
+            equipmentId={equipment.id}
+            onStarted={(id) => {
+              setActiveLotId(id);
+              setLotView("active");
+            }}
+            onCancel={() => {
+              markPhaseSkipped("LOT");
+            }}
+          />
+        );
+      }
+      if (lotView === "active" && activeLotId) {
+        return (
+          <LotActiveTracker
+            lotId={activeLotId}
+            onClosed={() => {
+              markPhaseDone("LOT");
+              setLotView("start");
+              setActiveLotId(null);
+            }}
+            onBack={() => setLotView("start")}
+          />
+        );
+      }
+    }
+
+    return (
+      <SimplePhasePanel
+        phase={activePhase}
+        onDone={(_min, _comment) => {
+          markPhaseDone(activePhase);
+        }}
+        onSkip={() => markPhaseSkipped(activePhase)}
+        onNext={() => {
+          const idx = cycleOrder.indexOf(activePhase);
+          const next = cycleOrder.slice(idx + 1).find((p) => phaseStatuses[p] !== "skipped");
+          if (next) handlePhaseClick(next);
+        }}
+        hasNext={hasNext}
+      />
+    );
+  }
+
+  const allDoneOrSkipped = cycleOrder.every(
+    (p) => phaseStatuses[p] === "done" || phaseStatuses[p] === "skipped",
+  );
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <PhaseRail
+        room={room}
+        equipment={equipment}
+        cycleOrder={cycleOrder}
+        phaseStatuses={phaseStatuses}
+        activePhase={activePhase}
+        onPhaseClick={handlePhaseClick}
+        elapsed={sessionElapsed}
+      />
+
+      <div className="flex-1">
+        {allDoneOrSkipped ? (
+          <div className="p-6 max-w-sm mx-auto text-center space-y-5 pt-16">
+            <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="h-8 w-8 text-emerald-400" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">Cycle terminé</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Toutes les phases du local {room.code} ont été complétées.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Durée totale : {fmtDur(Math.floor(sessionElapsed / 60))}
+              </p>
+            </div>
+            <Button
+              className="w-full h-14 font-bold text-base"
+              onClick={onExit}
+            >
+              Terminer et revenir à l'accueil
+            </Button>
+          </div>
+        ) : (
+          renderPhaseContent()
+        )}
+      </div>
+
+      {/* Exit session button */}
+      {!allDoneOrSkipped && (
+        <div className="fixed bottom-4 right-4">
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs text-muted-foreground gap-1.5 shadow-lg bg-background"
+            onClick={onExit}
+          >
+            <X className="h-3.5 w-3.5" /> Quitter le cycle
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Local Picker ──────────────────────────────────────────────────────────────
+function LocalPicker({
+  onSelect,
+}: {
+  onSelect: (room: Room) => void;
+}) {
+  const { data: rooms, isLoading } = useListRooms();
+  const today = new Date().toISOString().split("T")[0];
+  const { data: entries } = useListProductionEntries({ dateFrom: today, dateTo: today });
+
+  const activeEquipIds = useMemo(
+    () => new Set((entries ?? []).filter((e) => e.status === "draft").map((e) => e.equipmentId)),
+    [entries],
+  );
+
+  const productionRooms = useMemo(
+    () => (rooms ?? []).filter((r) => r.equipments.length > 0),
+    [rooms],
+  );
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
+        Chargement des locaux…
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-5">
+      <div>
+        <h1 className="text-xl font-bold">Sélectionner un local</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {new Date().toLocaleDateString("fr-FR", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })}
+        </p>
+      </div>
+
+      {productionRooms.length === 0 ? (
+        <div className="border border-dashed border-border rounded-2xl p-12 text-center">
+          <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <p className="font-medium text-muted-foreground">Aucun local disponible</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Contactez l'administrateur pour configurer les locaux.
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {productionRooms.map((room) => {
+            const hasActive = room.equipments.some((e) => activeEquipIds.has(e.id));
+            return (
+              <button
+                key={room.id}
+                onClick={() => onSelect(room)}
+                className={cn(
+                  "w-full text-left rounded-2xl border p-4 transition-all hover:border-primary/60 hover:bg-primary/5 group",
+                  hasActive
+                    ? "border-amber-500/50 bg-amber-500/5"
+                    : "border-border bg-card",
+                )}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className={cn(
+                        "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                        hasActive ? "bg-amber-500/20" : "bg-muted",
+                      )}
+                    >
+                      <Building2
+                        className={cn(
+                          "h-5 w-5",
+                          hasActive ? "text-amber-400" : "text-muted-foreground",
+                        )}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm flex items-center gap-2">
+                        <span className="font-mono text-muted-foreground text-xs">{room.code}</span>
+                        <span className="truncate">{room.name}</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {room.equipments.length} équipement
+                        {room.equipments.length > 1 ? "s" : ""}
+                        {room.equipments.map((e) => ` · ${e.code}`).join("")}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {hasActive && (
+                      <span className="text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full font-medium">
+                        En cours
+                      </span>
+                    )}
+                    <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Machine Picker ────────────────────────────────────────────────────────────
+function MachinePicker({
+  room,
+  onSelect,
+  onBack,
+}: {
+  room: Room;
+  onSelect: (eq: { id: string; code: string; name: string }) => void;
+  onBack: () => void;
+}) {
+  const today = new Date().toISOString().split("T")[0];
+  const { data: entries } = useListProductionEntries({ dateFrom: today, dateTo: today });
+
+  const activeLotByEquip = useMemo(() => {
+    const m = new Map<string, (typeof entries)[0]>();
+    (entries ?? [])
+      .filter((e) => e.status === "draft")
+      .forEach((e) => m.set(e.equipmentId, e));
+    return m;
+  }, [entries]);
+
+  return (
+    <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-5">
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={onBack} className="h-10 w-10">
+          <ChevronLeft className="h-5 w-5" />
+        </Button>
+        <div>
+          <h1 className="text-xl font-bold">Sélectionner une machine</h1>
+          <p className="text-sm text-muted-foreground">
+            <span className="font-mono">{room.code}</span> — {room.name}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-3">
+        {room.equipments.map((eq) => {
+          const activeLot = activeLotByEquip.get(eq.id);
+          return (
+            <button
+              key={eq.id}
+              onClick={() => onSelect(eq)}
+              className={cn(
+                "w-full text-left rounded-2xl border p-5 transition-all hover:border-primary/60 hover:bg-primary/5 group",
+                activeLot ? "border-amber-500/50 bg-amber-500/5" : "border-border bg-card",
+              )}
+            >
+              <div className="flex items-center gap-4">
+                <div
+                  className={cn(
+                    "w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
+                    activeLot ? "bg-amber-500/20" : "bg-muted",
+                  )}
+                >
+                  <Cpu
+                    className={cn(
+                      "h-6 w-6",
+                      activeLot ? "text-amber-400" : "text-muted-foreground",
+                    )}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold flex items-center gap-2">
+                    <span className="font-mono text-muted-foreground text-sm">[{eq.code}]</span>
+                    <span className="truncate">{eq.name}</span>
+                  </div>
+                  {activeLot ? (
+                    <div className="text-xs text-amber-400 mt-0.5">
+                      Lot actif :{" "}
+                      <span className="font-mono">{(activeLot as { batchNumber?: string }).batchNumber ?? "—"}</span>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      TRS obj. {eq.trsObjective}%
+                    </div>
+                  )}
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Legacy List View (kept for supervisor/admin browsing) ────────────────────
 function LotListView({ onNew, onResume }: { onNew: () => void; onResume: (id: string) => void }) {
   const today = new Date().toISOString().split("T")[0];
   const { data: entries, isLoading } = useListProductionEntries({ dateFrom: today, dateTo: today });
@@ -1636,11 +2218,11 @@ function LotListView({ onNew, onResume }: { onNew: () => void; onResume: (id: st
     <div className="p-4 md:p-6 space-y-5 max-w-2xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Lot en cours</h1>
+          <h1 className="text-xl font-bold">Activité du jour</h1>
           <p className="text-sm text-muted-foreground">Aujourd'hui · {today}</p>
         </div>
         <Button className="h-12 px-5 font-semibold gap-2" onClick={onNew}>
-          <Plus className="h-5 w-5" /> Nouveau lot
+          <Plus className="h-5 w-5" /> Nouveau cycle
         </Button>
       </div>
 
@@ -1731,9 +2313,9 @@ function LotListView({ onNew, onResume }: { onNew: () => void; onResume: (id: st
       {!isLoading && (entries ?? []).length === 0 && (
         <div className="border border-dashed border-border rounded-xl p-12 text-center">
           <PackageOpen className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <p className="font-medium text-muted-foreground">Aucun lot aujourd'hui</p>
+          <p className="font-medium text-muted-foreground">Aucune activité aujourd'hui</p>
           <p className="text-sm text-muted-foreground mt-1">
-            Cliquez sur "Nouveau lot" pour commencer
+            Cliquez sur "Nouveau cycle" pour commencer
           </p>
         </div>
       )}
@@ -1742,41 +2324,80 @@ function LotListView({ onNew, onResume }: { onNew: () => void; onResume: (id: st
 }
 
 // ─── Entry Page Root ──────────────────────────────────────────────────────────
-export default function EntryPage() {
-  const [view, setView] = useState<"list" | "start" | "active">("list");
-  const [activeLotId, setActiveLotId] = useState<string | null>(null);
+type EntryView = "list" | "local" | "machine" | "session" | "active-lot";
 
-  if (view === "start") {
+export default function EntryPage() {
+  const [view, setView] = useState<EntryView>("list");
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [selectedEquipment, setSelectedEquipment] = useState<{
+    id: string;
+    code: string;
+    name: string;
+  } | null>(null);
+  const [resumeLotId, setResumeLotId] = useState<string | null>(null);
+
+  // Resume a lot directly (from list view)
+  if (view === "active-lot" && resumeLotId) {
     return (
-      <LotStartForm
-        onStarted={(id) => {
-          setActiveLotId(id);
-          setView("active");
+      <LotActiveTracker
+        lotId={resumeLotId}
+        onClosed={() => {
+          setResumeLotId(null);
+          setView("list");
         }}
-        onCancel={() => setView("list")}
+        onBack={() => {
+          setResumeLotId(null);
+          setView("list");
+        }}
       />
     );
   }
 
-  if (view === "active" && activeLotId) {
+  // New operator cycle flow
+  if (view === "local") {
     return (
-      <LotActiveTracker
-        lotId={activeLotId}
-        onClosed={() => {
-          setActiveLotId(null);
+      <LocalPicker
+        onSelect={(room) => {
+          setSelectedRoom(room);
+          setView("machine");
+        }}
+      />
+    );
+  }
+
+  if (view === "machine" && selectedRoom) {
+    return (
+      <MachinePicker
+        room={selectedRoom}
+        onSelect={(eq) => {
+          setSelectedEquipment(eq);
+          setView("session");
+        }}
+        onBack={() => setView("local")}
+      />
+    );
+  }
+
+  if (view === "session" && selectedRoom && selectedEquipment) {
+    return (
+      <SessionView
+        room={selectedRoom}
+        equipment={selectedEquipment}
+        onExit={() => {
+          setSelectedRoom(null);
+          setSelectedEquipment(null);
           setView("list");
         }}
-        onBack={() => setView("list")}
       />
     );
   }
 
   return (
     <LotListView
-      onNew={() => setView("start")}
+      onNew={() => setView("local")}
       onResume={(id) => {
-        setActiveLotId(id);
-        setView("active");
+        setResumeLotId(id);
+        setView("active-lot");
       }}
     />
   );

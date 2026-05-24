@@ -19,12 +19,14 @@ import notificationRulesRouter from "./notification-rules";
 import adminConfigRouter from "./admin-config";
 import calendarEventsRouter from "./calendar-events";
 import dailyEntriesRouter from "./daily-entries";
+import roomsRouter from "./rooms";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
 router.use(usersRouter);
+router.use(roomsRouter);
 router.use(equipmentsRouter);
 router.use(productsRouter);
 router.use(downtimeCategoriesRouter);

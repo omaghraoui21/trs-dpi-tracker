@@ -12,7 +12,10 @@ import {
   BookOpen,
   Loader2,
   Info,
-  X,
+  Building2,
+  Cpu,
+  CalendarDays,
+  LayoutList,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +38,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { useListEquipments, customFetch } from "@workspace/api-client-react";
+import { useListEquipments, customFetch, useListRooms } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -120,6 +123,14 @@ function getFirstDayOfWeek(year: number, month: number): number {
   return d === 0 ? 6 : d - 1;
 }
 
+function getWeekNumber(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d.valueOf() - yearStart.valueOf()) / 86400000 + 1) / 7);
+}
+
 // ─── Form dialog ─────────────────────────────────────────────────────────────
 
 interface EntryFormData {
@@ -163,7 +174,8 @@ function EntryDialog({
   }));
 
   const set =
-    (k: keyof EntryFormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    (k: keyof EntryFormData) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setForm((f) => ({ ...f, [k]: e.target.value }));
     };
 
@@ -233,12 +245,7 @@ function EntryDialog({
   const canValidate = isEdit && entry?.status === "draft" && isSupervisor;
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) onClose();
-      }}
-    >
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -330,7 +337,7 @@ function EntryDialog({
             </div>
           </div>
 
-          <div className="rounded-lg border bg-slate-50 dark:bg-slate-900/40 px-4 py-3 grid grid-cols-3 gap-3 text-sm">
+          <div className="rounded-lg border bg-muted/30 px-4 py-3 grid grid-cols-3 gap-3 text-sm">
             <div className="text-center">
               <div className="text-xs text-muted-foreground font-medium">tO</div>
               <div className="font-semibold text-sky-600">{fmtMin(tO)}</div>
@@ -351,7 +358,7 @@ function EntryDialog({
           </div>
 
           {tAP > tO && (
-            <div className="flex items-center gap-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+            <div className="flex items-center gap-2 rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-700 dark:text-red-400">
               <AlertCircle className="h-4 w-4 shrink-0" />
               tAP ({tAP} min) dépasse tO ({tO} min) — vérifiez les valeurs
             </div>
@@ -432,12 +439,7 @@ function DeleteDialog({
   });
 
   return (
-    <Dialog
-      open
-      onOpenChange={(o) => {
-        if (!o) onClose();
-      }}
-    >
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>Supprimer la fiche ?</DialogTitle>
@@ -468,45 +470,72 @@ function DeleteDialog({
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ─── KPI Cards ────────────────────────────────────────────────────────────────
 
-export default function DailyEntriesPage() {
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-
-  const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [equipmentId, setEquipmentId] = useState<string>("");
-
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editEntry, setEditEntry] = useState<DailyEntry | null>(null);
-  const [newEntryDate, setNewEntryDate] = useState<string | null>(null);
-  const [deleteEntry, setDeleteEntry] = useState<DailyEntry | null>(null);
-
-  const isSupervisor = user?.role === "supervisor" || user?.role === "admin";
-
-  const { data: equipments } = useListEquipments({ isActive: true } as any);
-  const activeEquipments = useMemo(
-    () => (equipments ?? []).filter((e: any) => e.isActive !== false),
-    [equipments],
+function KpiCards({ summary }: { summary: MonthlySummary }) {
+  const completionPct = Math.round((summary.daysWithEntries / summary.daysInMonth) * 100);
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="rounded-xl border bg-card p-4 text-center shadow-sm">
+        <div className="text-xs text-muted-foreground font-medium mb-1">Jours saisis</div>
+        <div className="text-2xl font-bold text-sky-600">{summary.daysWithEntries}</div>
+        <div className="text-xs text-muted-foreground">/ {summary.daysInMonth} jours</div>
+        <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
+          <div
+            className="h-full bg-sky-500 rounded-full transition-all"
+            style={{ width: `${completionPct}%` }}
+          />
+        </div>
+      </div>
+      <div className="rounded-xl border bg-card p-4 text-center shadow-sm">
+        <div className="text-xs text-muted-foreground font-medium mb-1">Σ tO mensuel</div>
+        <div className="text-2xl font-bold">{fmtMin(summary.totalTO)}</div>
+        <div className="text-xs text-muted-foreground">{summary.totalTO} min</div>
+      </div>
+      <div className="rounded-xl border bg-card p-4 text-center shadow-sm">
+        <div className="text-xs text-muted-foreground font-medium mb-1">Σ tAP mensuel</div>
+        <div className="text-2xl font-bold text-amber-600">{fmtMin(summary.totalTAP)}</div>
+        <div className="text-xs text-muted-foreground">{summary.totalTAP} min</div>
+      </div>
+      <div className="rounded-xl border bg-card p-4 text-center shadow-sm">
+        <div className="text-xs text-muted-foreground font-medium mb-1">Σ tR mensuel</div>
+        <div
+          className={cn(
+            "text-2xl font-bold",
+            summary.totalTR > 0 ? "text-emerald-600" : "text-muted-foreground",
+          )}
+        >
+          {fmtMin(summary.totalTR)}
+        </div>
+        <div className="text-xs text-muted-foreground">{summary.totalTR} min</div>
+      </div>
+    </div>
   );
+}
 
-  const firstEquip = activeEquipments[0]?.id ?? "";
-  const selectedEquipment = equipmentId || firstEquip;
+// ─── Calendar view ────────────────────────────────────────────────────────────
 
+function CalendarView({
+  year,
+  month,
+  summary,
+  isLoading,
+  equipmentId,
+  onOpenCreate,
+  onOpenEdit,
+  onDeleteEntry,
+}: {
+  year: number;
+  month: number;
+  summary: MonthlySummary | undefined;
+  isLoading: boolean;
+  equipmentId: string;
+  onOpenCreate: (date: string) => void;
+  onOpenEdit: (entry: DailyEntry) => void;
+  onDeleteEntry: (entry: DailyEntry) => void;
+}) {
   const daysInMonth = getDaysInMonth(year, month);
   const firstDayOfWeek = getFirstDayOfWeek(year, month);
-
-  const { data: summary, isLoading } = useQuery<MonthlySummary>({
-    queryKey: ["daily-entries", "summary", selectedEquipment, year, month],
-    queryFn: () =>
-      customFetch<MonthlySummary>(
-        `/api/daily-entries/monthly-summary?equipmentId=${selectedEquipment}&year=${year}&month=${month}`,
-      ),
-    enabled: !!selectedEquipment,
-  });
 
   const entryByDate = useMemo(() => {
     const map = new Map<string, DailyEntry>();
@@ -516,17 +545,336 @@ export default function DailyEntriesPage() {
     return map;
   }, [summary]);
 
+  const calendarCells: Array<{ date: string; day: number; weekNum: number; isWeekend: boolean } | null> =
+    useMemo(() => {
+      const cells: Array<{ date: string; day: number; weekNum: number; isWeekend: boolean } | null> = [];
+      for (let i = 0; i < firstDayOfWeek; i++) cells.push(null);
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        const dayOfWeek = (firstDayOfWeek + d - 1) % 7; // 0=Mon, 6=Sun
+        cells.push({
+          date,
+          day: d,
+          weekNum: getWeekNumber(new Date(year, month - 1, d)),
+          isWeekend: dayOfWeek >= 5, // Sat=5, Sun=6
+        });
+      }
+      const trailing = (7 - (cells.length % 7)) % 7;
+      for (let i = 0; i < trailing; i++) cells.push(null);
+      return cells;
+    }, [year, month, daysInMonth, firstDayOfWeek]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-32">
+        <Loader2 className="h-6 w-6 animate-spin text-sky-500" />
+      </div>
+    );
+  }
+
+  if (!equipmentId) return null;
+
+  return (
+    <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
+      {/* Day-of-week header */}
+      <div className="grid grid-cols-7 border-b bg-muted/30">
+        {DAY_LABELS.map((d, i) => (
+          <div
+            key={d}
+            className={cn(
+              "py-2 text-center text-xs font-medium",
+              i >= 5 ? "text-muted-foreground/50" : "text-muted-foreground",
+            )}
+          >
+            {d}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7">
+        {calendarCells.map((cell, idx) => {
+          if (!cell) {
+            return (
+              <div
+                key={`empty-${idx}`}
+                className="min-h-[72px] border-b border-r border-border/40 bg-muted/10"
+              />
+            );
+          }
+
+          const entry = entryByDate.get(cell.date);
+          const isToday = cell.date === todayISO();
+          const isPast = cell.date < todayISO();
+
+          return (
+            <div
+              key={cell.date}
+              onClick={() => {
+                if (entry) onOpenEdit(entry);
+                else if (isPast || isToday) onOpenCreate(cell.date);
+              }}
+              className={cn(
+                "min-h-[72px] border-b border-r border-border/40 p-1.5 flex flex-col cursor-pointer transition-colors select-none",
+                cell.isWeekend && !entry && "bg-muted/20",
+                entry?.status === "validated" &&
+                  "bg-emerald-50/60 dark:bg-emerald-950/20 hover:bg-emerald-50 dark:hover:bg-emerald-950/30",
+                entry?.status === "draft" &&
+                  "bg-amber-50/60 dark:bg-amber-950/20 hover:bg-amber-50 dark:hover:bg-amber-950/30",
+                !entry && (isPast || isToday) && "hover:bg-muted/30",
+                isToday && "ring-2 ring-inset ring-sky-400",
+              )}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span
+                  className={cn(
+                    "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full",
+                    isToday ? "bg-sky-500 text-white" : cell.isWeekend ? "text-muted-foreground/60" : "text-foreground",
+                  )}
+                >
+                  {cell.day}
+                </span>
+                {entry && (
+                  <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => onOpenEdit(entry)}
+                      className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                    {entry.status !== "validated" && (
+                      <button
+                        onClick={() => onDeleteEntry(entry)}
+                        className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                )}
+                {!entry && (isPast || isToday) && (
+                  <div className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground/40 hover:text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-900/30 transition-colors">
+                    <Plus className="h-3.5 w-3.5" />
+                  </div>
+                )}
+              </div>
+
+              {entry ? (
+                <div className="space-y-0.5 text-xs">
+                  <div className="flex items-center gap-1">
+                    {entry.status === "validated" ? (
+                      <CheckCircle2 className="h-3 w-3 text-emerald-600 shrink-0" />
+                    ) : (
+                      <Clock className="h-3 w-3 text-amber-500 shrink-0" />
+                    )}
+                    <span
+                      className={cn(
+                        "font-medium text-[10px]",
+                        entry.status === "validated" ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400",
+                      )}
+                    >
+                      {entry.status === "validated" ? "Validée" : "Brouillon"}
+                    </span>
+                  </div>
+                  <div className="text-muted-foreground text-[10px]">
+                    tR <span className="font-semibold text-foreground">{fmtMin(entry.tR)}</span>
+                  </div>
+                  <div className="text-muted-foreground text-[10px]">
+                    tO {fmtMin(entry.tO)}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 flex items-center justify-center">
+                  {!isPast && !isToday && (
+                    <span className="text-[10px] text-muted-foreground/30">futur</span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── List view ────────────────────────────────────────────────────────────────
+
+function ListView({
+  summary,
+  isLoading,
+  onOpenEdit,
+  onOpenCreate,
+  onDeleteEntry,
+}: {
+  summary: MonthlySummary | undefined;
+  isLoading: boolean;
+  onOpenEdit: (entry: DailyEntry) => void;
+  onOpenCreate: (date: string) => void;
+  onDeleteEntry: (entry: DailyEntry) => void;
+}) {
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-32">
+        <Loader2 className="h-6 w-6 animate-spin text-sky-500" />
+      </div>
+    );
+  }
+
+  const entries = summary?.days ?? [];
+  const today = todayISO();
+
+  return (
+    <div className="space-y-2">
+      {entries.length === 0 && (
+        <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+          Aucune fiche ce mois-ci — cliquez sur un jour dans le calendrier pour commencer
+        </div>
+      )}
+      {entries.map((e) => (
+        <div
+          key={e.id}
+          className={cn(
+            "rounded-xl border p-3 flex items-center justify-between gap-3 cursor-pointer hover:border-primary/40 transition-colors",
+            e.status === "validated"
+              ? "bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-500/20"
+              : "bg-card border-border",
+          )}
+          onClick={() => onOpenEdit(e)}
+        >
+          <div className="min-w-0">
+            <div className="font-medium text-sm">
+              {new Date(e.entryDate + "T00:00:00").toLocaleDateString("fr-FR", {
+                weekday: "short",
+                day: "numeric",
+                month: "long",
+              })}
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              tR{" "}
+              <span className="font-semibold text-foreground">{fmtMin(e.tR)}</span>{" "}
+              · tO {fmtMin(e.tO)} · tAP {fmtMin(e.tAP)}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span
+              className={cn(
+                "text-xs px-2 py-0.5 rounded-full border font-medium",
+                e.status === "validated"
+                  ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                  : "bg-amber-500/10 text-amber-600 border-amber-500/20",
+              )}
+            >
+              {e.status === "validated" ? "Validée" : "Brouillon"}
+            </span>
+            {e.entryDate <= today && e.status !== "validated" && (
+              <button
+                onClick={(ev) => { ev.stopPropagation(); onDeleteEntry(e); }}
+                className="h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Equipment selector with room hierarchy ────────────────────────────────────
+
+function EquipmentSelector({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const { data: rooms, isLoading } = useListRooms();
+  const [selectedRoom, setSelectedRoom] = useState<string>("");
+
+  const productionRooms = useMemo(
+    () => (rooms ?? []).filter((r) => r.equipments.length > 0),
+    [rooms],
+  );
+
+  const roomEquipments = useMemo(
+    () =>
+      selectedRoom
+        ? (rooms ?? []).find((r) => r.id === selectedRoom)?.equipments ?? []
+        : (rooms ?? []).flatMap((r) => r.equipments),
+    [rooms, selectedRoom],
+  );
+
+  if (isLoading) return <div className="text-sm text-muted-foreground">Chargement…</div>;
+
+  return (
+    <div className="flex gap-2">
+      {productionRooms.length > 1 && (
+        <Select value={selectedRoom} onValueChange={setSelectedRoom}>
+          <SelectTrigger className="w-36">
+            <SelectValue placeholder="Local…" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">Tous</SelectItem>
+            {productionRooms.map((r) => (
+              <SelectItem key={r.id} value={r.id}>
+                <span className="font-mono text-muted-foreground text-xs mr-1">{r.code}</span>
+                {r.name.split(" ")[0]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="min-w-[200px]">
+          <SelectValue placeholder="Choisir un équipement" />
+        </SelectTrigger>
+        <SelectContent>
+          {roomEquipments.map((eq) => (
+            <SelectItem key={eq.id} value={eq.id}>
+              <span className="font-mono text-muted-foreground text-xs mr-1">[{eq.code}]</span>
+              {eq.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
+export default function DailyEntriesPage() {
+  const queryClient = useQueryClient();
+
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [equipmentId, setEquipmentId] = useState<string>("");
+  const [displayMode, setDisplayMode] = useState<"calendar" | "list">("calendar");
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editEntry, setEditEntry] = useState<DailyEntry | null>(null);
+  const [newEntryDate, setNewEntryDate] = useState<string | null>(null);
+  const [deleteEntry, setDeleteEntry] = useState<DailyEntry | null>(null);
+
+  const { data: summary, isLoading } = useQuery<MonthlySummary>({
+    queryKey: ["daily-entries", "summary", equipmentId, year, month],
+    queryFn: () =>
+      customFetch<MonthlySummary>(
+        `/api/daily-entries/monthly-summary?equipmentId=${equipmentId}&year=${year}&month=${month}`,
+      ),
+    enabled: !!equipmentId,
+  });
+
   function prevMonth() {
-    if (month === 1) {
-      setYear((y) => y - 1);
-      setMonth(12);
-    } else setMonth((m) => m - 1);
+    if (month === 1) { setYear((y) => y - 1); setMonth(12); }
+    else setMonth((m) => m - 1);
   }
   function nextMonth() {
-    if (month === 12) {
-      setYear((y) => y + 1);
-      setMonth(1);
-    } else setMonth((m) => m + 1);
+    if (month === 12) { setYear((y) => y + 1); setMonth(1); }
+    else setMonth((m) => m + 1);
   }
 
   function openCreate(date: string) {
@@ -540,28 +888,10 @@ export default function DailyEntriesPage() {
     setDialogOpen(true);
   }
 
-  const completionPct = summary
-    ? Math.round((summary.daysWithEntries / summary.daysInMonth) * 100)
-    : 0;
-
-  const calendarCells: Array<{ date: string; day: number } | null> = useMemo(() => {
-    const cells: Array<{ date: string; day: number } | null> = [];
-    for (let i = 0; i < firstDayOfWeek; i++) cells.push(null);
-    for (let d = 1; d <= daysInMonth; d++) {
-      cells.push({
-        date: `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`,
-        day: d,
-      });
-    }
-    const trailing = (7 - (cells.length % 7)) % 7;
-    for (let i = 0; i < trailing; i++) cells.push(null);
-    return cells;
-  }, [year, month, daysInMonth, firstDayOfWeek]);
-
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-5">
       {/* ── Header ─────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-start gap-4">
         <div className="flex-1">
           <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
             <BookOpen className="h-5 w-5 text-sky-600" />
@@ -571,228 +901,127 @@ export default function DailyEntriesPage() {
             Saisie des temps journaliers (tO, arrêts planifiés, tR) par équipement
           </p>
         </div>
-        <div className="w-full sm:w-56">
-          <Select value={selectedEquipment} onValueChange={setEquipmentId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Choisir un équipement" />
-            </SelectTrigger>
-            <SelectContent>
-              {activeEquipments.map((eq: any) => (
-                <SelectItem key={eq.id} value={eq.id}>
-                  {eq.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex flex-col gap-2 items-end">
+          <EquipmentSelector value={equipmentId} onChange={setEquipmentId} />
         </div>
       </div>
 
-      {/* ── Month navigation ───────────────────────────────── */}
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" size="icon" onClick={prevMonth}>
-          <ChevronLeft className="h-5 w-5" />
-        </Button>
-        <h2 className="text-lg font-semibold">
-          {MONTH_LABELS[month - 1]} {year}
-        </h2>
-        <Button variant="ghost" size="icon" onClick={nextMonth}>
-          <ChevronRight className="h-5 w-5" />
-        </Button>
-      </div>
-
-      {/* ── Monthly KPI cards ──────────────────────────────── */}
-      {isLoading ? (
-        <div className="flex items-center justify-center h-24">
-          <Loader2 className="h-6 w-6 animate-spin text-sky-500" />
-        </div>
-      ) : summary ? (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="rounded-xl border bg-card p-4 text-center shadow-sm">
-            <div className="text-xs text-muted-foreground font-medium mb-1">Jours saisis</div>
-            <div className="text-2xl font-bold text-sky-600">{summary.daysWithEntries}</div>
-            <div className="text-xs text-muted-foreground">/ {summary.daysInMonth} jours</div>
-            <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
-              <div
-                className="h-full bg-sky-500 rounded-full transition-all"
-                style={{ width: `${completionPct}%` }}
-              />
-            </div>
+      {/* ── Empty state — no equipment selected ────────────── */}
+      {!equipmentId && (
+        <div className="rounded-2xl border border-dashed border-border p-14 text-center space-y-4">
+          <div className="flex justify-center gap-4 opacity-40">
+            <Building2 className="h-10 w-10 text-muted-foreground" />
+            <Cpu className="h-10 w-10 text-muted-foreground" />
           </div>
-          <div className="rounded-xl border bg-card p-4 text-center shadow-sm">
-            <div className="text-xs text-muted-foreground font-medium mb-1">Σ tO mensuel</div>
-            <div className="text-2xl font-bold text-slate-700 dark:text-slate-200">
-              {fmtMin(summary.totalTO)}
-            </div>
-            <div className="text-xs text-muted-foreground">{summary.totalTO} min</div>
+          <div>
+            <p className="font-semibold text-lg text-muted-foreground">Sélectionnez un équipement</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Choisissez d'abord le local puis l'équipement pour afficher les fiches du mois.
+            </p>
           </div>
-          <div className="rounded-xl border bg-card p-4 text-center shadow-sm">
-            <div className="text-xs text-muted-foreground font-medium mb-1">Σ tAP mensuel</div>
-            <div className="text-2xl font-bold text-amber-600">{fmtMin(summary.totalTAP)}</div>
-            <div className="text-xs text-muted-foreground">{summary.totalTAP} min</div>
-          </div>
-          <div className="rounded-xl border bg-card p-4 text-center shadow-sm">
-            <div className="text-xs text-muted-foreground font-medium mb-1">Σ tR mensuel</div>
-            <div
-              className={cn(
-                "text-2xl font-bold",
-                summary.totalTR > 0 ? "text-emerald-600" : "text-slate-400",
-              )}
-            >
-              {fmtMin(summary.totalTR)}
-            </div>
-            <div className="text-xs text-muted-foreground">{summary.totalTR} min</div>
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-xl border bg-card p-6 text-center text-muted-foreground text-sm">
-          Sélectionnez un équipement pour afficher les fiches du mois
         </div>
       )}
 
-      {/* ── Calendar grid ──────────────────────────────────── */}
-      {selectedEquipment && (
-        <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
-          {/* Day-of-week header */}
-          <div className="grid grid-cols-7 border-b">
-            {DAY_LABELS.map((d) => (
-              <div key={d} className="py-2 text-center text-xs font-medium text-muted-foreground">
-                {d}
-              </div>
-            ))}
-          </div>
-
-          {/* Calendar cells */}
-          <div className="grid grid-cols-7">
-            {calendarCells.map((cell, idx) => {
-              if (!cell) {
-                return (
-                  <div
-                    key={`empty-${idx}`}
-                    className="min-h-[80px] border-b border-r border-border/50 bg-muted/20"
-                  />
-                );
-              }
-
-              const entry = entryByDate.get(cell.date);
-              const isToday = cell.date === todayISO();
-              const isPast = cell.date < todayISO();
-
-              return (
-                <div
-                  key={cell.date}
+      {equipmentId && (
+        <>
+          {/* ── Month navigation ───────────────────────────── */}
+          <div className="flex items-center justify-between">
+            <Button variant="ghost" size="icon" onClick={prevMonth}>
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold">
+                {MONTH_LABELS[month - 1]} {year}
+              </h2>
+              <div className="flex items-center border border-border rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setDisplayMode("calendar")}
                   className={cn(
-                    "min-h-[80px] border-b border-r border-border/50 p-1.5 flex flex-col",
-                    "transition-colors",
-                    entry
-                      ? entry.status === "validated"
-                        ? "bg-emerald-50/60 dark:bg-emerald-950/20 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
-                        : "bg-amber-50/60 dark:bg-amber-950/20 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-                      : "hover:bg-muted/30",
-                    isToday && "ring-2 ring-inset ring-sky-400",
+                    "px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5",
+                    displayMode === "calendar"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span
-                      className={cn(
-                        "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full",
-                        isToday ? "bg-sky-500 text-white" : "text-foreground",
-                      )}
-                    >
-                      {cell.day}
-                    </span>
-                    {entry && (
-                      <div className="flex items-center gap-0.5">
-                        <button
-                          onClick={() => openEdit(entry)}
-                          className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                          title="Modifier"
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                        {entry.status !== "validated" && (
-                          <button
-                            onClick={() => setDeleteEntry(entry)}
-                            className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"
-                            title="Supprimer"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    {!entry && (
-                      <button
-                        onClick={() => openCreate(cell.date)}
-                        className="h-5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-sky-600 hover:bg-sky-50 transition-colors"
-                        title="Ajouter une fiche"
-                      >
-                        <Plus className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
-
-                  {entry ? (
-                    <div className="space-y-0.5 text-xs">
-                      <div className="flex items-center gap-1">
-                        {entry.status === "validated" ? (
-                          <CheckCircle2 className="h-3 w-3 text-emerald-600 shrink-0" />
-                        ) : (
-                          <Clock className="h-3 w-3 text-amber-500 shrink-0" />
-                        )}
-                        <span
-                          className={cn(
-                            "font-medium",
-                            entry.status === "validated" ? "text-emerald-700" : "text-amber-700",
-                          )}
-                        >
-                          {entry.status === "validated" ? "Validée" : "Brouillon"}
-                        </span>
-                      </div>
-                      <div className="text-muted-foreground">
-                        tR <span className="font-semibold text-foreground">{fmtMin(entry.tR)}</span>
-                      </div>
-                      <div className="text-muted-foreground">
-                        tO {fmtMin(entry.tO)} · tAP {fmtMin(entry.tAP)}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex-1 flex items-center justify-center">
-                      {isPast || isToday ? (
-                        <span className="text-xs text-muted-foreground/50">—</span>
-                      ) : null}
-                    </div>
+                  <CalendarDays className="h-3.5 w-3.5" /> Calendrier
+                </button>
+                <button
+                  onClick={() => setDisplayMode("list")}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5",
+                    displayMode === "list"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground",
                   )}
-                </div>
-              );
-            })}
+                >
+                  <LayoutList className="h-3.5 w-3.5" /> Liste
+                </button>
+              </div>
+            </div>
+            <Button variant="ghost" size="icon" onClick={nextMonth}>
+              <ChevronRight className="h-5 w-5" />
+            </Button>
           </div>
-        </div>
-      )}
 
-      {/* ── Legend ─────────────────────────────────────────── */}
-      {selectedEquipment && (
-        <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded bg-emerald-200 border border-emerald-300" />
-            Fiche validée
+          {/* ── Monthly KPI cards ──────────────────────────── */}
+          {isLoading ? (
+            <div className="flex items-center justify-center h-24">
+              <Loader2 className="h-6 w-6 animate-spin text-sky-500" />
+            </div>
+          ) : summary ? (
+            <KpiCards summary={summary} />
+          ) : (
+            <div className="rounded-xl border bg-card p-6 text-center text-muted-foreground text-sm">
+              Aucune donnée pour ce mois
+            </div>
+          )}
+
+          {/* ── Calendar or List ────────────────────────────── */}
+          {displayMode === "calendar" ? (
+            <CalendarView
+              year={year}
+              month={month}
+              summary={summary}
+              isLoading={isLoading}
+              equipmentId={equipmentId}
+              onOpenCreate={openCreate}
+              onOpenEdit={openEdit}
+              onDeleteEntry={setDeleteEntry}
+            />
+          ) : (
+            <ListView
+              summary={summary}
+              isLoading={isLoading}
+              onOpenEdit={openEdit}
+              onOpenCreate={openCreate}
+              onDeleteEntry={setDeleteEntry}
+            />
+          )}
+
+          {/* ── Legend ─────────────────────────────────────── */}
+          <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded bg-emerald-200 dark:bg-emerald-800 border border-emerald-300 dark:border-emerald-700" />
+              Fiche validée
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded bg-amber-200 dark:bg-amber-800 border border-amber-300 dark:border-amber-700" />
+              Brouillon
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-3 h-3 rounded bg-background border border-border" />
+              Non saisi
+            </div>
+            <div className="flex items-center gap-1.5 ml-auto">
+              <Info className="h-3.5 w-3.5" />
+              tR = tO − (Pause + CHSG + APR + MQCH) — dénominateur du TRS mensuel
+            </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded bg-amber-200 border border-amber-300" />
-            Brouillon
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded bg-background border border-border" />
-            Non saisi
-          </div>
-          <div className="flex items-center gap-1.5 ml-auto">
-            <Info className="h-3.5 w-3.5" />
-            tR = tO − (Pause + CHSG + APR + MQCH) — dénominateur du TRS mensuel
-          </div>
-        </div>
+        </>
       )}
 
       {/* ── Dialogs ────────────────────────────────────────── */}
-      {dialogOpen && selectedEquipment && (
+      {dialogOpen && equipmentId && (
         <EntryDialog
           open={dialogOpen}
           onClose={() => {
@@ -801,7 +1030,7 @@ export default function DailyEntriesPage() {
           }}
           entry={editEntry}
           defaultDate={newEntryDate ?? todayISO()}
-          equipmentId={selectedEquipment}
+          equipmentId={equipmentId}
           onSaved={() => queryClient.invalidateQueries({ queryKey: ["daily-entries"] })}
         />
       )}
