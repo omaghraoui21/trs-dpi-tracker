@@ -12,6 +12,7 @@ jobs:
       - name: Dump PostgreSQL
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PGSSLMODE: require
         run: |
           sudo apt-get install -y postgresql-client
           pg_dump "$DATABASE_URL" --no-owner --no-acl -Fc -f backup_$(date +%Y%m%d_%H%M%S).dump
