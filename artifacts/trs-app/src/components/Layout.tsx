@@ -31,35 +31,44 @@ export function Layout({ children }: LayoutProps) {
 
   if (!user) return <>{children}</>;
 
-  const navItems = [
+  const primaryNav = [
     {
-      title: "Lot en cours",
+      title: "Saisie du jour",
       href: "/entry",
       icon: <ClipboardList className="h-5 w-5" />,
       allowed: ["operator", "supervisor", "admin"],
     },
     {
-      title: "Lots du jour",
+      title: "Lots à valider",
       href: "/lots",
       icon: <ClipboardList className="h-5 w-5" />,
       allowed: ["supervisor", "admin"],
     },
     {
-      title: "Revue / Corrections",
-      href: "/supervisor",
-      icon: <Activity className="h-5 w-5" />,
-      allowed: ["supervisor", "admin"],
-    },
-    {
-      title: "Cockpit Production",
+      title: "Tableau de bord",
       href: "/production",
       icon: <Gauge className="h-5 w-5" />,
       allowed: ["supervisor", "admin"],
     },
     {
-      title: "Planning Hebdo.",
+      title: "Planning",
       href: "/planning",
       icon: <CalendarRange className="h-5 w-5" />,
+      allowed: ["supervisor", "admin"],
+    },
+    {
+      title: "Administration",
+      href: "/admin",
+      icon: <Settings className="h-5 w-5" />,
+      allowed: ["admin"],
+    },
+  ];
+
+  const secondaryNav = [
+    {
+      title: "Revue / Corrections",
+      href: "/supervisor",
+      icon: <Activity className="h-5 w-5" />,
       allowed: ["supervisor", "admin"],
     },
     {
@@ -92,36 +101,52 @@ export function Layout({ children }: LayoutProps) {
       icon: <Eraser className="h-5 w-5" />,
       allowed: ["admin"],
     },
-    {
-      title: "Administration",
-      href: "/admin",
-      icon: <Settings className="h-5 w-5" />,
-      allowed: ["admin"],
-    },
   ];
 
-  const visibleNavItems = navItems.filter((item) => item.allowed.includes(user.role));
+  const visiblePrimary = primaryNav.filter((item) => item.allowed.includes(user.role));
+  const visibleSecondary = secondaryNav.filter((item) => item.allowed.includes(user.role));
+
+  const NavLink = ({
+    item,
+    onNavigate,
+  }: {
+    item: (typeof primaryNav)[number];
+    onNavigate?: () => void;
+  }) => {
+    const isActive = location === item.href || location.startsWith(`${item.href}/`);
+    return (
+      <Link key={item.href} href={item.href} onClick={onNavigate}>
+        <div
+          className={cn(
+            "flex items-center px-3 min-h-[52px] text-sm font-medium rounded-lg transition-colors cursor-pointer",
+            isActive
+              ? "bg-primary/10 text-primary"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          )}
+        >
+          <span className="mr-3 shrink-0">{item.icon}</span>
+          {item.title}
+        </div>
+      </Link>
+    );
+  };
 
   const NavLinks = ({ onNavigate }: { onNavigate?: () => void }) => (
     <nav className="space-y-1 px-3">
-      {visibleNavItems.map((item) => {
-        const isActive = location === item.href || location.startsWith(`${item.href}/`);
-        return (
-          <Link key={item.href} href={item.href} onClick={onNavigate}>
-            <div
-              className={cn(
-                "flex items-center px-3 min-h-[52px] text-sm font-medium rounded-lg transition-colors cursor-pointer",
-                isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
-            >
-              <span className="mr-3 shrink-0">{item.icon}</span>
-              {item.title}
-            </div>
-          </Link>
-        );
-      })}
+      {visiblePrimary.map((item) => (
+        <NavLink key={item.href} item={item} onNavigate={onNavigate} />
+      ))}
+      {visibleSecondary.length > 0 && (
+        <>
+          <div className="my-2 border-t border-border/50" />
+          <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+            Outils
+          </div>
+          {visibleSecondary.map((item) => (
+            <NavLink key={item.href} item={item} onNavigate={onNavigate} />
+          ))}
+        </>
+      )}
     </nav>
   );
 
