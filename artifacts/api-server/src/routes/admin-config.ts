@@ -14,10 +14,21 @@ import {
   productPresentationsTable,
   appSettingsTable,
 } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth, requireRole } from "../middlewares/auth";
 import { seedDpiConfig } from "../scripts/seed_dpi";
+
+const RESET_TABLES = [
+  "audit_log", "notifications", "kpi_daily", "kpi_monthly",
+  "downtime_events", "activity_downtimes", "production_entries", "activities",
+  "daily_entries", "equipment_status_events", "room_status_events",
+  "planning_imports", "production_plans", "monthly_closures", "annual_calendar_events",
+  "notification_rules", "kpi_targets", "standard_times", "assembly_boms",
+  "product_presentations", "planning_activity_mappings", "cadences",
+  "downtime_categories", "equipments", "rooms", "products", "users",
+  "sites", "app_settings", "roles",
+] as const;
 
 const router = Router();
 
@@ -82,6 +93,21 @@ router.post("/load-dpi-config", requireAuth, requireRole("admin"), async (req, r
   } catch (err) {
     req.log.error(err, "Failed to load DPI config");
     res.status(500).json({ error: "Échec du chargement de la configuration DPI" });
+  }
+});
+
+// POST /admin/reset-all-data — vide toutes les données (admin uniquement)
+router.post("/reset-all-data", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    req.log.warn("RESET ALL DATA — initiated by admin");
+    for (const table of RESET_TABLES) {
+      await db.execute(sql.raw(`TRUNCATE TABLE "${table}" CASCADE`));
+    }
+    req.log.info("RESET ALL DATA — completed");
+    res.json({ success: true, message: "Toutes les données ont été supprimées." });
+  } catch (err) {
+    req.log.error(err, "RESET ALL DATA — failed");
+    res.status(500).json({ error: "Échec du reset" });
   }
 });
 
