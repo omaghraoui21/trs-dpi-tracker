@@ -52,6 +52,7 @@ export function SimplePhasePanel({
 
   function handleConfirm() {
     onDone(doneMin, comment);
+    if (hasNext) onNext();
   }
 
   return (

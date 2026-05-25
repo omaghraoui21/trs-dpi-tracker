@@ -166,8 +166,12 @@ export default function UsersPage() {
                           title="Désactiver"
                           className="h-9 w-9 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-500/10"
                           onClick={async () => {
-                            await deleteUser.mutateAsync({ id: u.id });
-                            qc.invalidateQueries({ queryKey: getListUsersQueryKey() });
+                            try {
+                              await deleteUser.mutateAsync({ id: u.id });
+                              qc.invalidateQueries({ queryKey: getListUsersQueryKey() });
+                            } catch {
+                              // error surfaced by global MutationCache.onError
+                            }
                           }}
                         >
                           <XCircle className="h-4 w-4" />
