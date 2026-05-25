@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import type { Room } from "@workspace/api-client-react";
 import { LotListView } from "@/components/lots/LotListView";
 import { LotActiveTracker } from "./LotActiveTracker";
@@ -9,6 +10,7 @@ import { SessionView } from "./SessionView";
 type EntryView = "list" | "local" | "machine" | "session" | "active-lot";
 
 export default function EntryPage() {
+  const [, navigate] = useLocation();
   // Read ?resume=<lotId> from URL — set when navigating from /lots
   const initialResumeId =
     typeof window !== "undefined"
@@ -30,10 +32,12 @@ export default function EntryPage() {
         onClosed={() => {
           setResumeLotId(null);
           setView("list");
+          navigate("/entry");
         }}
         onBack={() => {
           setResumeLotId(null);
           setView("list");
+          navigate("/entry");
         }}
       />
     );
