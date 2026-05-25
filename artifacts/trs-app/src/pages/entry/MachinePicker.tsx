@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useListProductionEntries } from "@workspace/api-client-react";
 import type { ProductionEntryWithDetails, Room } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, Cpu, ArrowRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Cpu, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function MachinePicker({
@@ -26,14 +26,31 @@ export function MachinePicker({
   return (
     <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-5">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={onBack} className="h-10 w-10">
+        <Button variant="ghost" size="icon" onClick={onBack} className="h-10 w-10 shrink-0">
           <ChevronLeft className="h-5 w-5" />
         </Button>
-        <div>
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              <span className="text-muted-foreground">{room.code}</span>
+            </span>
+            <ChevronRight className="h-3 w-3" />
+            <span className="flex items-center gap-1">
+              <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center text-[10px]">
+                2
+              </span>
+              <span className="font-medium text-foreground">Machine</span>
+            </span>
+            <ChevronRight className="h-3 w-3 opacity-40" />
+            <span className="flex items-center gap-1 opacity-40">
+              <span className="w-5 h-5 rounded-full border border-muted-foreground flex items-center justify-center text-[10px]">
+                3
+              </span>
+              <span>Lot</span>
+            </span>
+          </div>
           <h1 className="text-xl font-bold">Sélectionner une machine</h1>
-          <p className="text-sm text-muted-foreground">
-            <span className="font-mono">{room.code}</span> — {room.name}
-          </p>
         </div>
       </div>
 

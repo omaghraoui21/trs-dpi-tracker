@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useListRooms, useListProductionEntries } from "@workspace/api-client-react";
 import type { Room } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
-import { Building2, ArrowRight } from "lucide-react";
+import { Building2, ArrowRight, ChevronRight } from "lucide-react";
 
 export function LocalPicker({ onSelect }: { onSelect: (room: Room) => void }) {
   const { data: rooms, isLoading } = useListRooms();
@@ -29,9 +29,31 @@ export function LocalPicker({ onSelect }: { onSelect: (room: Room) => void }) {
 
   return (
     <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-5">
-      <div>
+      <div className="space-y-2">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center text-[10px]">
+              1
+            </span>
+            <span className="font-medium text-foreground">Local</span>
+          </span>
+          <ChevronRight className="h-3 w-3" />
+          <span className="flex items-center gap-1 opacity-40">
+            <span className="w-5 h-5 rounded-full border border-muted-foreground flex items-center justify-center text-[10px]">
+              2
+            </span>
+            <span>Machine</span>
+          </span>
+          <ChevronRight className="h-3 w-3 opacity-40" />
+          <span className="flex items-center gap-1 opacity-40">
+            <span className="w-5 h-5 rounded-full border border-muted-foreground flex items-center justify-center text-[10px]">
+              3
+            </span>
+            <span>Lot</span>
+          </span>
+        </div>
         <h1 className="text-xl font-bold">Sélectionner un local</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
+        <p className="text-sm text-muted-foreground">
           {new Date().toLocaleDateString("fr-FR", {
             weekday: "long",
             day: "numeric",

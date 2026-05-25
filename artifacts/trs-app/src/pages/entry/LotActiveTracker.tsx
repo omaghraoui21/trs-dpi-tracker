@@ -24,6 +24,7 @@ import {
   Gauge,
   Edit3,
   AlarmClock,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -127,6 +128,32 @@ export function LotActiveTracker({
       initializedRef.current = true;
     }
   }, [entry]);
+
+  // Auto-save quantities 1.5s after the last change
+  useEffect(() => {
+    if (!dirty || !entry) return;
+    const t = setTimeout(async () => {
+      setSaving(true);
+      try {
+        await updateEntry.mutateAsync({
+          id: lotId,
+          data: {
+            quantityProduced: produced,
+            quantityConforming: conforming,
+            quantityRejected: Math.max(0, produced - conforming),
+          },
+        });
+        setDirty(false);
+        qc.invalidateQueries({
+          queryKey: getListProductionEntriesQueryKey({ dateFrom: today, dateTo: today }),
+        });
+      } finally {
+        setSaving(false);
+      }
+    }, 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [produced, conforming]);
 
   const openDowntime = useMemo(
     () => downtimes.find((d) => d.status === "open") ?? null,
@@ -421,29 +448,48 @@ export function LotActiveTracker({
       {/* Live TRS */}
       {trs && (
         <div className="bg-card border border-border rounded-xl px-4 py-3 space-y-2">
-          <div className="grid grid-cols-5 gap-2 text-center">
-            {(
-              [
-                { label: "TRS", v: trs.TRS, sub: "tU/tR" },
-                { label: "TRG", v: trs.TRG, sub: "tU/tO" },
-                { label: "DO", v: trs.DO, sub: "tF/tR" },
-                { label: "TP", v: trs.TP, sub: "tN/tF" },
-                { label: "TQ", v: trs.TQ, sub: "tU/tN" },
-              ] as const
-            ).map(({ label, v, sub }) => (
-              <div key={label}>
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wide">
-                  {label}
-                </div>
-                <div className="text-base font-bold tabular-nums" style={{ color: trsHex(v) }}>
-                  {(v * 100).toFixed(0)}%
-                </div>
-                <div className="text-[9px] text-muted-foreground/60">{sub}</div>
+          <div className="flex items-center gap-4">
+            {/* TRS hero */}
+            <div className="flex flex-col items-center justify-center w-20 shrink-0">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">
+                TRS
               </div>
-            ))}
+              <div
+                className="text-4xl font-extrabold tabular-nums leading-none"
+                style={{ color: trsHex(trs.TRS) }}
+              >
+                {(trs.TRS * 100).toFixed(0)}
+                <span className="text-xl font-bold">%</span>
+              </div>
+            </div>
+            {/* Separator */}
+            <div className="w-px self-stretch bg-border shrink-0" />
+            {/* Secondary KPIs */}
+            <div className="grid grid-cols-2 gap-x-5 gap-y-1.5 flex-1">
+              {(
+                [
+                  { label: "TRG", v: trs.TRG, sub: "tU/tO" },
+                  { label: "DO", v: trs.DO, sub: "tF/tR" },
+                  { label: "TP", v: trs.TP, sub: "tN/tF" },
+                  { label: "TQ", v: trs.TQ, sub: "tU/tN" },
+                ] as const
+              ).map(({ label, v, sub }) => (
+                <div key={label} className="flex items-baseline gap-1.5">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide w-7 shrink-0">
+                    {label}
+                  </span>
+                  <span className="text-sm font-bold tabular-nums" style={{ color: trsHex(v) }}>
+                    {(v * 100).toFixed(0)}%
+                  </span>
+                  <span className="text-[9px] text-muted-foreground/50 hidden sm:inline">
+                    {sub}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="text-[10px] text-muted-foreground text-center border-t border-border pt-1.5">
-            tO = {trs.tO} min — TO calculé automatiquement depuis l'horaire poste
+          <div className="text-[10px] text-muted-foreground border-t border-border pt-1.5">
+            tO = {trs.tO} min — calculé automatiquement depuis l'horaire poste
           </div>
         </div>
       )}
@@ -562,16 +608,19 @@ export function LotActiveTracker({
               {Math.max(0, produced - conforming)} {equipCfg.unit}
             </span>
           </span>
-          <Button
-            className={cn(
-              "h-10 px-5",
-              dirty ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
-            )}
-            disabled={!dirty || saving}
-            onClick={saveQty}
-          >
-            {saving ? "Enregistrement…" : dirty ? "Enregistrer" : "Enregistré ✓"}
-          </Button>
+          {saving ? (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" /> Enregistrement…
+            </span>
+          ) : dirty ? (
+            <span className="flex items-center gap-1.5 text-xs text-amber-500">
+              <Clock className="h-3 w-3" /> Sauvegarde auto…
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-xs text-emerald-500">
+              <CheckCircle2 className="h-3 w-3" /> Enregistré
+            </span>
+          )}
         </div>
       </div>
 

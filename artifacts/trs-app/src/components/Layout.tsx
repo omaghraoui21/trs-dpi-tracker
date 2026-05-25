@@ -5,6 +5,7 @@ import {
   Activity,
   BarChart3,
   ClipboardList,
+  FileCheck,
   Settings,
   LogOut,
   Menu,
@@ -41,7 +42,7 @@ export function Layout({ children }: LayoutProps) {
     {
       title: "Lots à valider",
       href: "/lots",
-      icon: <ClipboardList className="h-5 w-5" />,
+      icon: <FileCheck className="h-5 w-5" />,
       allowed: ["supervisor", "admin"],
     },
     {
@@ -109,19 +110,25 @@ export function Layout({ children }: LayoutProps) {
   const NavLink = ({
     item,
     onNavigate,
+    dark,
   }: {
     item: (typeof primaryNav)[number];
     onNavigate?: () => void;
+    dark?: boolean;
   }) => {
     const isActive = location === item.href || location.startsWith(`${item.href}/`);
     return (
       <Link key={item.href} href={item.href} onClick={onNavigate}>
         <div
           className={cn(
-            "flex items-center px-3 min-h-[52px] text-sm font-medium rounded-lg transition-colors cursor-pointer",
-            isActive
-              ? "bg-primary/10 text-primary"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            "flex items-center px-3 min-h-[48px] text-sm font-medium rounded-lg transition-colors cursor-pointer",
+            dark
+              ? isActive
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/65 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+              : isActive
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
           )}
         >
           <span className="mr-3 shrink-0">{item.icon}</span>
@@ -131,44 +138,70 @@ export function Layout({ children }: LayoutProps) {
     );
   };
 
-  const NavLinks = ({ onNavigate }: { onNavigate?: () => void }) => (
-    <nav className="space-y-1 px-3">
+  const NavLinks = ({ onNavigate, dark }: { onNavigate?: () => void; dark?: boolean }) => (
+    <nav className="space-y-0.5 px-3">
       {visiblePrimary.map((item) => (
-        <NavLink key={item.href} item={item} onNavigate={onNavigate} />
+        <NavLink key={item.href} item={item} onNavigate={onNavigate} dark={dark} />
       ))}
       {visibleSecondary.length > 0 && (
         <>
-          <div className="my-2 border-t border-border/50" />
-          <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+          <div
+            className={cn("my-2 border-t", dark ? "border-sidebar-border/50" : "border-border/50")}
+          />
+          <div
+            className={cn(
+              "px-3 py-1 text-[10px] font-semibold uppercase tracking-wider",
+              dark ? "text-sidebar-foreground/35" : "text-muted-foreground/60",
+            )}
+          >
             Outils
           </div>
           {visibleSecondary.map((item) => (
-            <NavLink key={item.href} item={item} onNavigate={onNavigate} />
+            <NavLink key={item.href} item={item} onNavigate={onNavigate} dark={dark} />
           ))}
         </>
       )}
     </nav>
   );
 
-  const NavFooter = ({ onNavigate }: { onNavigate?: () => void }) => (
-    <div className="p-4 border-t border-border mt-auto">
+  const NavFooter = ({ onNavigate, dark }: { onNavigate?: () => void; dark?: boolean }) => (
+    <div className={cn("p-4 border-t mt-auto", dark ? "border-sidebar-border" : "border-border")}>
       <div className="flex items-center gap-3 px-2 mb-3">
-        <Avatar className="h-9 w-9 shrink-0 bg-primary/10 text-primary">
+        <Avatar
+          className={cn(
+            "h-9 w-9 shrink-0",
+            dark ? "bg-sidebar-accent text-sidebar-foreground" : "bg-primary/10 text-primary",
+          )}
+        >
           <AvatarFallback>
             {user.firstName[0]}
             {user.lastName[0]}
           </AvatarFallback>
         </Avatar>
         <div className="flex flex-col overflow-hidden min-w-0">
-          <span className="text-sm font-medium truncate">
+          <span
+            className={cn("text-sm font-medium truncate", dark ? "text-sidebar-foreground" : "")}
+          >
             {user.firstName} {user.lastName}
           </span>
-          <span className="text-xs text-muted-foreground capitalize truncate">{user.role}</span>
+          <span
+            className={cn(
+              "text-xs capitalize truncate",
+              dark ? "text-sidebar-foreground/50" : "text-muted-foreground",
+            )}
+          >
+            {user.role}
+          </span>
         </div>
       </div>
       <Button
-        variant="outline"
-        className="w-full justify-start h-11"
+        variant="ghost"
+        className={cn(
+          "w-full justify-start h-10",
+          dark
+            ? "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            : "",
+        )}
         onClick={() => {
           logout();
           onNavigate?.();
@@ -183,15 +216,15 @@ export function Layout({ children }: LayoutProps) {
   return (
     <div className="min-h-screen bg-background flex w-full">
       {/* Desktop / Large-tablet Sidebar (≥1024px) */}
-      <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r border-border bg-card">
-        <div className="flex h-16 items-center px-6 text-primary border-b border-border">
-          <Activity className="h-6 w-6 mr-2 shrink-0" />
+      <aside className="hidden lg:flex w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
+        <div className="flex h-16 items-center px-6 text-sidebar-foreground border-b border-sidebar-border">
+          <Activity className="h-6 w-6 mr-2 shrink-0 text-sky-400" />
           <span className="font-bold text-lg tracking-tight">DPI TRS Tracker</span>
         </div>
-        <div className="flex-1 py-4 overflow-y-auto">
-          <NavLinks />
+        <div className="flex-1 py-3 overflow-y-auto">
+          <NavLinks dark />
         </div>
-        <NavFooter />
+        <NavFooter dark />
       </aside>
 
       {/* Mobile / Tablet Drawer overlay */}
@@ -205,17 +238,17 @@ export function Layout({ children }: LayoutProps) {
       {/* Mobile / Tablet Drawer panel */}
       <aside
         className={cn(
-          "lg:hidden fixed left-0 top-0 bottom-0 z-50 w-72 flex flex-col bg-card border-r border-border transition-transform duration-200",
+          "lg:hidden fixed left-0 top-0 bottom-0 z-50 w-72 flex flex-col bg-sidebar border-r border-sidebar-border transition-transform duration-200",
           drawerOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className="flex h-16 items-center justify-between px-5 border-b border-border">
-          <div className="flex items-center text-primary">
-            <Activity className="h-5 w-5 mr-2" />
+        <div className="flex h-16 items-center justify-between px-5 border-b border-sidebar-border">
+          <div className="flex items-center text-sidebar-foreground">
+            <Activity className="h-5 w-5 mr-2 text-sky-400" />
             <span className="font-bold text-base tracking-tight">DPI TRS Tracker</span>
           </div>
           <button
-            className="h-10 w-10 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+            className="h-10 w-10 flex items-center justify-center rounded-lg text-sidebar-foreground/50 hover:bg-sidebar-accent transition-colors"
             onClick={() => setDrawerOpen(false)}
             aria-label="Fermer le menu"
           >
@@ -223,9 +256,9 @@ export function Layout({ children }: LayoutProps) {
           </button>
         </div>
         <div className="flex-1 py-3 overflow-y-auto">
-          <NavLinks onNavigate={() => setDrawerOpen(false)} />
+          <NavLinks onNavigate={() => setDrawerOpen(false)} dark />
         </div>
-        <NavFooter onNavigate={() => setDrawerOpen(false)} />
+        <NavFooter onNavigate={() => setDrawerOpen(false)} dark />
       </aside>
 
       {/* Main Content */}
