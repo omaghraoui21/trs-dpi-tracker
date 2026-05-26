@@ -5,7 +5,9 @@ import {
 } from "@workspace/api-client-react";
 import { Plus, Timer, Play, CheckCircle2, PackageOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { trsHex } from "@/pages/entry/utils";
 
 export interface LotListViewProps {
   onNew: () => void;
@@ -34,7 +36,22 @@ export function LotListView({ onNew, onResume }: LotListViewProps) {
         </Button>
       </div>
 
-      {isLoading && <div className="text-center py-10 text-muted-foreground">Chargement…</div>}
+      {isLoading && (
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-card border border-border rounded-xl p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="space-y-2 flex-1">
+                  <Skeleton className="h-4 w-48" />
+                  <Skeleton className="h-3 w-32" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+                <Skeleton className="h-11 w-24 rounded-lg shrink-0" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {active.length > 0 && (
         <div className="space-y-2">
@@ -104,14 +121,30 @@ export function LotListView({ onNew, onResume }: LotListViewProps) {
                     {e.quantityProduced} u. · {e.quantityConforming} conf.
                   </div>
                 </div>
-                <span
-                  className={cn(
-                    "text-xs font-medium px-2.5 py-1 rounded-full border shrink-0",
-                    statusClass,
-                  )}
-                >
-                  {statusLabel}
-                </span>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <span
+                    className={cn(
+                      "text-xs font-medium px-2.5 py-1 rounded-full border",
+                      statusClass,
+                    )}
+                  >
+                    {statusLabel}
+                  </span>
+                  {(() => {
+                    const trsVal = (e as unknown as { trsMetrics?: { TRS?: number } }).trsMetrics
+                      ?.TRS;
+                    if (trsVal == null) return null;
+                    const hex = trsHex(trsVal);
+                    return (
+                      <span
+                        className="text-xs font-bold tabular-nums px-2 py-0.5 rounded-full"
+                        style={{ color: hex, backgroundColor: `${hex}22` }}
+                      >
+                        TRS {(trsVal * 100).toFixed(0)}%
+                      </span>
+                    );
+                  })()}
+                </div>
               </div>
             );
           })}
