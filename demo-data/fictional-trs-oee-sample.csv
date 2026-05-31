@@ -1,0 +1,6 @@
+date,line,shift,product,batch,opening_time_min,planned_stop_min,unplanned_downtime_min,standard_cadence_per_hour,produced_qty,conforming_qty,downtime_category,review_note
+2026-05-01,Line A,Morning,Product Alpha,BATCH-DEMO-001,480,90,45,1000,5500,5390,changeover,Fictional example for TRS calculation documentation
+2026-05-01,Line B,Evening,Product Beta,BATCH-DEMO-002,420,60,80,850,4300,4215,breakdown,Fictional example with availability loss
+2026-05-02,Line A,Night,Product Gamma,BATCH-DEMO-003,450,75,30,920,5400,5100,quality_hold,Fictional example with quality loss
+2026-05-02,Line C,Morning,Product Delta,BATCH-DEMO-004,480,120,20,1100,6200,6180,planned_cleaning,Fictional example with strong performance
+2026-05-03,Line B,Evening,Product Alpha,BATCH-DEMO-005,480,80,95,1000,5000,4925,material_shortage,Fictional example with supply-related loss
